@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Réservations — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Réservations</h1>
+        <p class="section-subtitle">Valide le paiement, démarre, clôture ou annule chaque réservation.</p>
+
+        <div class="grid grid-2 mt-3" style="max-width:420px;">
+            <div class="field">
+                <label for="filterStatus">Filtrer par statut</label>
+                <select id="filterStatus">
+                    <option value="">Tous</option>
+                    <option value="pending">En attente de paiement</option>
+                    <option value="confirmed">Payée</option>
+                    <option value="active">En cours</option>
+                    <option value="completed">Terminée</option>
+                    <option value="cancelled">Annulée</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="filterSearch">Rechercher</label>
+                <input type="text" id="filterSearch" placeholder="Référence, véhicule, client...">
+            </div>
+        </div>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead>
+                    <tr><th>Référence</th><th>Client</th><th>Véhicule</th><th>Départ</th><th>Retour</th><th>Total</th><th>Statut</th><th>Action</th></tr>
+                </thead>
+                <tbody id="reservationsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("reservations.html");
+    if (!userHasPermission(user, "reservations", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "reservations", "edit");
+
+    const { data: profileRows } = await supabaseClient.from("profiles").select("*");
+    const users = profileRows || [];
+    function clientName(userId) {
+        const u = users.find(function (x) { return x.id === userId; });
+        if (!u) return "—";
+        const fullName = (u.first_name || "") + " " + (u.last_name || "");
+        return u.business_name ? u.business_name + " (" + fullName.trim() + ")" : fullName.trim();
+    }
+
+    const filterStatus = document.getElementById("filterStatus");
+    const filterSearch = document.getElementById("filterSearch");
+
+    let allReservations = await getAllReservations();
+
+    function renderTable() {
+        let reservations = allReservations;
+
+        if (filterStatus.value) {
+            reservations = reservations.filter(function (r) { return r.status === filterStatus.value; });
+        }
+        if (filterSearch.value.trim()) {
+            const q = filterSearch.value.trim().toLowerCase();
+            reservations = reservations.filter(function (r) {
+                return r.reference.toLowerCase().indexOf(q) !== -1 ||
+                    r.vehicleName.toLowerCase().indexOf(q) !== -1 ||
+                    clientName(r.userId).toLowerCase().indexOf(q) !== -1;
+            });
+        }
+
+        document.getElementById("reservationsBody").innerHTML = reservations.length
+            ? reservations.map(function (r) {
+                const meta = getReservationStatusMeta(r.status);
+                const actions = [];
+                if (canEdit) {
+                    if (r.status === "pending") {
+                        actions.push('<button class="btn btn-primary btn-sm setStatus" data-ref="' + r.reference + '" data-status="confirmed">Valider le paiement</button>');
+                    }
+                    if (r.status === "confirmed") {
+                        actions.push('<button class="btn btn-outline btn-sm setStatus" data-ref="' + r.reference + '" data-status="active">Démarrer la location</button>');
+                    }
+                    if (r.status === "active") {
+                        actions.push('<button class="btn btn-outline btn-sm setStatus" data-ref="' + r.reference + '" data-status="completed">Marquer terminée</button>');
+                    }
+                    if (r.status === "pending" || r.status === "confirmed") {
+                        actions.push('<button class="btn btn-outline btn-sm setStatus" data-ref="' + r.reference + '" data-status="cancelled">Annuler</button>');
+                    }
+                }
+
+                return (
+                    '<tr>' +
+                    '<td>' + r.reference + '</td>' +
+                    '<td>' + clientName(r.userId) + '</td>' +
+                    '<td>' + r.vehicleName + '</td>' +
+                    '<td>' + r.startDate + ' ' + r.startTime + '</td>' +
+                    '<td>' + r.endDate + ' ' + r.endTime + '</td>' +
+                    '<td>' + r.total.toLocaleString("fr-FR") + ' $</td>' +
+                    '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                    '<td style="white-space:nowrap;">' + (actions.join(" ") || '—') + '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="8" class="text-silver">Aucune réservation trouvée.</td></tr>';
+
+        document.querySelectorAll(".setStatus").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                btn.disabled = true;
+                await updateReservationStatus(btn.getAttribute("data-ref"), btn.getAttribute("data-status"));
+                allReservations = await getAllReservations();
+                renderTable();
+            });
+        });
+    }
+
+    filterStatus.addEventListener("change", renderTable);
+    filterSearch.addEventListener("input", renderTable);
+    renderTable();
+});
+</script>
+
+</body>
+</html>

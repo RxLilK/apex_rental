@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Prix — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Gestion des prix</h1>
+        <p class="section-subtitle">Prix, réduction et avantages des abonnements VIP.</p>
+
+        <div id="tierConfigSection" class="mt-3" style="display:none;">
+            <p class="section-subtitle">Réservé au Directeur (grade 10) — prix, réduction et avantages d'Apex Club, Apex Black et Business.</p>
+            <div class="grid grid-3 mt-3" id="tierConfigGrid"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("prix.html");
+    if (!userHasPermission(user, "prix", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    // ---- ABONNEMENTS (Directeur / admin uniquement) ----
+    if (canManageClubTiers(user)) {
+        document.getElementById("tierConfigSection").style.display = "block";
+        const configGrid = document.getElementById("tierConfigGrid");
+
+        const tierCodes = ["apex-club", "apex-black", "entreprise"];
+        const tiers = await Promise.all(tierCodes.map(getEffectiveClubTierInfo));
+
+        configGrid.innerHTML = tierCodes.map(function (code, idx) {
+            const t = tiers[idx];
+            return (
+                '<div class="card">' +
+                '  <h3 style="font-size:15px; color:var(--apex-white);">' + t.label + '</h3>' +
+                '  <form class="tierForm mt-2" data-tier="' + code + '">' +
+                '    <div class="form-group"><label>Prix / semaine ($)</label><input type="number" min="0" name="pricePerWeek" value="' + t.pricePerWeek + '"></div>' +
+                '    <div class="form-group"><label>Réduction location (%)</label><input type="number" min="0" max="100" name="rentalDiscount" value="' + (t.rentalDiscount * 100) + '"></div>' +
+                '    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--apex-silver); margin-bottom:8px;"><input type="checkbox" name="freeDelivery" ' + (t.freeDelivery ? 'checked' : '') + ' style="width:16px; height:16px; accent-color:var(--apex-red);"> Livraison gratuite</label>' +
+                '    <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--apex-silver); margin-bottom:12px;"><input type="checkbox" name="freeInsurance" ' + (t.freeInsurance ? 'checked' : '') + ' style="width:16px; height:16px; accent-color:var(--apex-red);"> Assurance offerte</label>' +
+                '    <div class="form-group">' +
+                '      <label>Avantages (un par ligne)</label>' +
+                '      <textarea name="perks" rows="5">' + t.perks.join("\n") + '</textarea>' +
+                '    </div>' +
+                '    <button type="submit" class="btn btn-primary btn-sm">Enregistrer</button>' +
+                '    <span class="text-silver saved-msg hidden" style="font-size:12px; margin-left:10px;">✓ Enregistré</span>' +
+                '  </form>' +
+                '</div>'
+            );
+        }).join("");
+
+        configGrid.querySelectorAll(".tierForm").forEach(function (form) {
+            form.addEventListener("submit", async function (e) {
+                e.preventDefault();
+                const code = form.getAttribute("data-tier");
+                const result = await setClubTierOverride(code, {
+                    pricePerWeek: parseInt(form.pricePerWeek.value, 10) || 0,
+                    rentalDiscount: (parseInt(form.rentalDiscount.value, 10) || 0) / 100,
+                    freeDelivery: form.freeDelivery.checked,
+                    freeInsurance: form.freeInsurance.checked,
+                    perks: form.perks.value.split("\n").map(function (p) { return p.trim(); }).filter(function (p) { return p; })
+                });
+                const msg = form.querySelector(".saved-msg");
+                if (!result.ok) {
+                    msg.textContent = "✗ " + result.error;
+                    msg.style.color = "var(--apex-red)";
+                    msg.classList.remove("hidden");
+                    return;
+                }
+                msg.textContent = "✓ Enregistré";
+                msg.style.color = "";
+                msg.classList.remove("hidden");
+                setTimeout(function () { msg.classList.add("hidden"); }, 2500);
+            });
+        });
+    }
+});
+</script>
+
+</body>
+</html>

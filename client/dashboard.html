@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon espace — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="client-sidebar"></aside>
+    <div class="dashboard-main" id="dashboardContent"></div>
+</div>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderClientSidebar("dashboard.html");
+
+    const reservations = await getReservationsForUser(user.id);
+
+    const now = new Date();
+    const currentRentals = reservations.filter(function (r) {
+        if (r.status === "cancelled") return false;
+        const start = new Date(r.startDate + "T" + r.startTime);
+        const end = new Date(r.endDate + "T" + r.endTime);
+        return now >= start && now <= end;
+    });
+    const totalDeposit = reservations.reduce(function (sum, r) { return sum + (r.deposit || 0); }, 0);
+    const tierInfo = await getEffectiveClubTierInfo(user.clubTier);
+
+    const rowsHTML = reservations.length
+        ? reservations.map(function (r) {
+            const meta = getReservationStatusMeta(r.status);
+            return (
+                '<tr>' +
+                '<td>' + r.reference + '</td>' +
+                '<td>' + r.vehicleName + '</td>' +
+                '<td>' + r.startDate + ' ' + r.startTime + '</td>' +
+                '<td>' + r.endDate + ' ' + r.endTime + '</td>' +
+                '<td>' + r.total.toLocaleString("fr-FR") + ' $</td>' +
+                '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                '</tr>'
+            );
+        }).join("")
+        : '<tr><td colspan="6" class="text-silver">Aucune réservation pour le moment.</td></tr>';
+
+    const currentRentalsHTML = currentRentals.length
+        ? currentRentals.map(function (r) {
+            return (
+                '<div class="dashboard-card mt-2">' +
+                '  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">' +
+                '    <div>' +
+                '      <div class="stat-value" style="font-size:18px;">' + r.vehicleName + '</div>' +
+                '      <div class="text-silver" style="font-size:12px; margin-top:2px;">' + r.reference + ' — retour prévu le ' + r.endDate + ' à ' + r.endTime + '</div>' +
+                '    </div>' +
+                '    <span class="badge badge-rented">En cours</span>' +
+                '  </div>' +
+                '</div>'
+            );
+        }).join("")
+        : '<p class="text-silver mt-2">Aucune location en cours actuellement.</p>';
+
+    document.getElementById("dashboardContent").innerHTML =
+        '<h1 class="section-title">Bonjour, ' + user.firstName + (user.businessName ? ' <span class="text-silver" style="font-size:16px;">(' + user.businessName + ')</span>' : '') + '</h1>' +
+
+        '<div class="grid grid-3 mt-3">' +
+        '  <div class="dashboard-card">' +
+        '    <div class="stat-label">Réservations</div>' +
+        '    <div class="stat-value red">' + reservations.length + '</div>' +
+        '  </div>' +
+        '  <div class="dashboard-card">' +
+        '    <div class="stat-label">Caution totale engagée</div>' +
+        '    <div class="stat-value green" style="font-size:20px;">' + totalDeposit.toLocaleString("fr-FR") + ' $</div>' +
+        '  </div>' +
+        '  <div class="dashboard-card">' +
+        '    <div class="stat-label">Abonnement</div>' +
+        '    <div class="stat-value orange" style="font-size:20px;">' + tierInfo.label + '</div>' +
+        '  </div>' +
+        '</div>' +
+
+        '<h2 class="section-title mt-4" style="font-size:18px;">Locations en cours</h2>' +
+        currentRentalsHTML +
+
+        '<h2 class="section-title mt-4" style="font-size:18px;">Mes réservations</h2>' +
+        '<div class="table-wrap mt-2">' +
+        '  <table class="table">' +
+        '    <thead><tr><th>Référence</th><th>Véhicule</th><th>Départ</th><th>Retour</th><th>Total</th><th>Statut</th></tr></thead>' +
+        '    <tbody>' + rowsHTML + '</tbody>' +
+        '  </table>' +
+        '</div>' +
+
+        '<a href="../vehicules.html" class="btn btn-primary mt-4">Réserver un nouveau véhicule</a>';
+
+});
+</script>
+
+</body>
+</html>

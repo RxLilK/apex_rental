@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Permissions — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+<style>
+    .perm-row { display:grid; grid-template-columns: 1fr 90px 90px; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+    .perm-row:last-child { border-bottom:none; }
+    .perm-head { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:rgba(184,188,194,0.6); }
+    .perm-check { display:flex; justify-content:center; }
+    .perm-check input { width:18px; height:18px; accent-color: var(--apex-red); cursor:pointer; }
+    .grade-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+    .grade-tab { padding:8px 14px; border-radius:20px; border:1px solid rgba(255,255,255,0.12); font-size:12px; color:var(--apex-silver); cursor:pointer; }
+    .grade-tab.active { background:var(--apex-red); border-color:var(--apex-red); color:#fff; }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Permissions par grade</h1>
+        <p class="section-subtitle">Choisis un grade, coche ce qu'il peut voir et/ou modifier. "Modifier" implique automatiquement "Voir".</p>
+
+        <div class="grade-tabs mt-3" id="gradeTabs"></div>
+
+        <div class="card mt-3" style="max-width:640px;">
+            <div class="perm-row">
+                <span class="perm-head">Capacité</span>
+                <span class="perm-head" style="text-align:center;">Voir</span>
+                <span class="perm-head" style="text-align:center;">Modifier</span>
+            </div>
+            <div id="permRows"></div>
+            <button id="savePerm" class="btn btn-primary btn-sm mt-3">Enregistrer pour ce grade</button>
+            <span class="text-silver saved-msg hidden" style="font-size:12px; margin-left:10px;">✓ Enregistré</span>
+        </div>
+
+        <p class="text-silver mt-3" style="font-size:12px; max-width:640px;">
+            Les capacités sans page dédiée pour l'instant (réservations, préparation, livraisons, récupération, inspections) sont prêtes pour de futures pages terrain — leur permission est déjà enregistrable.
+        </p>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user || user.role !== "admin") { window.location.href = "dashboard.html"; return; }
+    renderAdminSidebar("permissions.html");
+
+    let currentGrade = EMPLOYEE_GRADES[0].code;
+
+    function renderTabs() {
+        document.getElementById("gradeTabs").innerHTML = EMPLOYEE_GRADES.map(function (g) {
+            return '<button type="button" class="grade-tab' + (g.code === currentGrade ? ' active' : '') + '" data-code="' + g.code + '">' + g.level + ' — ' + g.label + '</button>';
+        }).join("");
+
+        document.querySelectorAll(".grade-tab").forEach(function (tab) {
+            tab.addEventListener("click", function () {
+                currentGrade = tab.getAttribute("data-code");
+                renderTabs();
+                renderRows();
+            });
+        });
+    }
+
+    function renderRows() {
+        const perms = getGradePermissions(currentGrade);
+        document.getElementById("permRows").innerHTML = CAPABILITIES.map(function (c) {
+            const p = perms[c.key] || { view: false, edit: false };
+            return (
+                '<div class="perm-row" data-key="' + c.key + '">' +
+                '  <span style="font-size:13px; color:var(--apex-white);">' + c.label + '</span>' +
+                '  <label class="perm-check"><input type="checkbox" class="viewCheck" ' + (p.view ? 'checked' : '') + '></label>' +
+                '  <label class="perm-check"><input type="checkbox" class="editCheck" ' + (p.edit ? 'checked' : '') + '></label>' +
+                '</div>'
+            );
+        }).join("");
+
+        // "Modifier" implique "Voir"
+        document.querySelectorAll(".editCheck").forEach(function (cb) {
+            cb.addEventListener("change", function () {
+                if (cb.checked) {
+                    cb.closest(".perm-row").querySelector(".viewCheck").checked = true;
+                }
+            });
+        });
+        // Décocher "Voir" décoche aussi "Modifier"
+        document.querySelectorAll(".viewCheck").forEach(function (cb) {
+            cb.addEventListener("change", function () {
+                if (!cb.checked) {
+                    cb.closest(".perm-row").querySelector(".editCheck").checked = false;
+                }
+            });
+        });
+    }
+
+    document.getElementById("savePerm").addEventListener("click", function () {
+        const perms = {};
+        document.querySelectorAll("#permRows .perm-row").forEach(function (row) {
+            const key = row.getAttribute("data-key");
+            perms[key] = {
+                view: row.querySelector(".viewCheck").checked,
+                edit: row.querySelector(".editCheck").checked
+            };
+        });
+        setGradePermissions(currentGrade, perms);
+
+        const msg = document.querySelector(".saved-msg");
+        msg.classList.remove("hidden");
+        setTimeout(function () { msg.classList.add("hidden"); }, 2000);
+    });
+
+    renderTabs();
+    renderRows();
+});
+</script>
+
+</body>
+</html>

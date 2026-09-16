@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mes informations — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main class="section-sm">
+    <div class="container" style="max-width:560px;">
+        <h1 class="section-title">Mes informations</h1>
+        <p class="section-subtitle">Ton identifiant, tes coordonnées, et les accès à ton compte.</p>
+
+        <div class="card mt-3">
+            <h3 style="font-size:14px; color:var(--apex-white);">Identifiant de connexion</h3>
+            <p class="text-silver mt-1" style="font-size:12px;">Utilisé pour te connecter à la place de ton e-mail, si tu préfères.</p>
+            <div id="usernameError" class="form-error hidden mt-2"></div>
+            <div id="usernameSuccess" class="form-success hidden mt-2"></div>
+            <form id="usernameForm" class="mt-2" style="display:flex; gap:8px; align-items:flex-end;">
+                <div class="form-group" style="flex:1; margin-bottom:0;">
+                    <label for="usernameField">Identifiant</label>
+                    <input type="text" id="usernameField" required>
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <h3 style="font-size:14px; color:var(--apex-white);">Informations personnelles</h3>
+            <div id="profileError" class="form-error hidden mt-2"></div>
+            <div id="profileSuccess" class="form-success hidden mt-2"></div>
+            <form id="profileForm" class="mt-2">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firstNameField">Prénom</label>
+                        <input type="text" id="firstNameField" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lastNameField">Nom</label>
+                        <input type="text" id="lastNameField" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="phoneField">Téléphone</label>
+                    <input type="tel" id="phoneField" placeholder="(xxx) xxx-xxxx">
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <h3 style="font-size:14px; color:var(--apex-white);">Adresse e-mail</h3>
+            <p class="text-silver mt-1" style="font-size:12px;">E-mail actuel : <strong id="currentEmail" style="color:var(--apex-white);">—</strong></p>
+            <div id="emailError" class="form-error hidden mt-2"></div>
+            <div id="emailSuccess" class="form-success hidden mt-2"></div>
+            <form id="emailForm" class="mt-2" style="display:flex; gap:8px; align-items:flex-end;">
+                <div class="form-group" style="flex:1; margin-bottom:0;">
+                    <label for="newEmailField">Nouvel e-mail</label>
+                    <input type="email" id="newEmailField" required>
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Mettre à jour</button>
+            </form>
+        </div>
+
+        <div class="card mt-3">
+            <h3 style="font-size:14px; color:var(--apex-white);">Mot de passe</h3>
+            <div id="passwordError" class="form-error hidden mt-2"></div>
+            <div id="passwordSuccess" class="form-success hidden mt-2"></div>
+            <form id="passwordForm" class="mt-2">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="newPasswordField">Nouveau mot de passe</label>
+                        <input type="password" id="newPasswordField" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPasswordField">Confirmer</label>
+                        <input type="password" id="confirmPasswordField" minlength="6" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Changer le mot de passe</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+
+    document.getElementById("usernameField").value = user.username || "";
+    document.getElementById("firstNameField").value = user.firstName || "";
+    document.getElementById("lastNameField").value = user.lastName || "";
+    document.getElementById("phoneField").value = user.phone || "";
+    document.getElementById("currentEmail").textContent = user.email || "—";
+    formatPhoneInput(document.getElementById("phoneField"));
+
+    function showResult(prefix, result, successMessage) {
+        const errorBox = document.getElementById(prefix + "Error");
+        const successBox = document.getElementById(prefix + "Success");
+        errorBox.classList.add("hidden");
+        successBox.classList.add("hidden");
+        if (!result.ok) {
+            errorBox.textContent = result.error;
+            errorBox.classList.remove("hidden");
+        } else {
+            successBox.textContent = successMessage;
+            successBox.classList.remove("hidden");
+        }
+    }
+
+    document.getElementById("usernameForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const result = await updateOwnUsername(document.getElementById("usernameField").value);
+        showResult("username", result, "Identifiant mis à jour.");
+    });
+
+    document.getElementById("profileForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const result = await updateOwnProfile({
+            firstName: document.getElementById("firstNameField").value,
+            lastName: document.getElementById("lastNameField").value,
+            phone: document.getElementById("phoneField").value
+        });
+        showResult("profile", result, "Informations mises à jour.");
+    });
+
+    document.getElementById("emailForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const result = await updateOwnEmail(document.getElementById("newEmailField").value);
+        showResult("email", result, "Demande envoyée — vérifie ta boîte mail pour confirmer le changement (selon la configuration du site).");
+        if (result.ok) document.getElementById("emailForm").reset();
+    });
+
+    document.getElementById("passwordForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const pw = document.getElementById("newPasswordField").value;
+        const confirm = document.getElementById("confirmPasswordField").value;
+        if (pw !== confirm) {
+            showResult("password", { ok: false, error: "Les deux mots de passe ne correspondent pas." });
+            return;
+        }
+        const result = await updateOwnPassword(pw);
+        showResult("password", result, "Mot de passe changé avec succès.");
+        if (result.ok) document.getElementById("passwordForm").reset();
+    });
+});
+</script>
+
+</body>
+</html>

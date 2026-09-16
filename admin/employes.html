@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Employés — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Employés</h1>
+        <p class="section-subtitle">La personne doit d'abord créer son propre compte via la page Inscription. Retrouve-le ensuite par e-mail pour le promouvoir employé.</p>
+
+        <div class="card mt-3" style="max-width:560px;" id="createEmployeeCard">
+            <h3 style="font-size:14px; color:var(--apex-white);">Promouvoir un compte en employé</h3>
+            <div id="empError" class="form-error hidden mt-2"></div>
+            <div id="empSuccess" class="form-success hidden mt-2"></div>
+            <form id="employeeForm" class="mt-2">
+                <div class="form-group">
+                    <label for="empEmail">E-mail du compte déjà créé</label>
+                    <input type="email" id="empEmail" required placeholder="lapersonne@exemple.com">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="empGrade">Grade</label>
+                        <select id="empGrade"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="empPhone">Téléphone (optionnel, met à jour le profil)</label>
+                        <input type="tel" id="empPhone" placeholder="(xxx) xxx-xxxx">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Promouvoir en employé</button>
+            </form>
+        </div>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead><tr><th>Nom</th><th>Grade</th><th>Niveau</th><th>E-mail</th><th>Téléphone</th><th>Actions</th></tr></thead>
+                <tbody id="employeesBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("employes.html");
+    if (!userHasPermission(user, "employes", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "employes", "edit");
+    if (!canEdit) document.getElementById("createEmployeeCard").style.display = "none";
+
+    const gradeSelect = document.getElementById("empGrade");
+    EMPLOYEE_GRADES.forEach(function (g) {
+        const opt = document.createElement("option");
+        opt.value = g.code;
+        opt.textContent = g.level + " — " + g.label;
+        gradeSelect.appendChild(opt);
+    });
+
+    formatPhoneInput(document.getElementById("empPhone"));
+
+    function gradeSelectOptions(current) {
+        return EMPLOYEE_GRADES.map(function (g) {
+            return '<option value="' + g.code + '"' + (g.code === current ? ' selected' : '') + '>' + g.level + ' — ' + g.label + '</option>';
+        }).join("");
+    }
+
+    async function renderTable() {
+        const employees = (await getEmployeeUsers()).sort(function (a, b) {
+            return getGradeMeta(b.gradeCode).level - getGradeMeta(a.gradeCode).level;
+        });
+
+        document.getElementById("employeesBody").innerHTML = employees.length
+            ? employees.map(function (e) {
+                const grade = getGradeMeta(e.gradeCode);
+                return (
+                    '<tr>' +
+                    '<td>' + e.firstName + ' ' + e.lastName + '</td>' +
+                    '<td><select data-id="' + e.id + '" class="gradeChangeSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + gradeSelectOptions(e.gradeCode) + '</select></td>' +
+                    '<td>' + grade.level + '</td>' +
+                    '<td>' + (e.email || '—') + '</td>' +
+                    '<td>' + (e.phone || '—') + '</td>' +
+                    '<td>' + (canEdit ? '<button class="btn btn-outline btn-sm removeEmp" data-id="' + e.id + '">Rétrograder en client</button>' : '—') + '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="6" class="text-silver">Aucun employé enregistré.</td></tr>';
+
+        document.querySelectorAll(".gradeChangeSelect").forEach(function (select) {
+            select.addEventListener("change", async function () {
+                select.disabled = true;
+                await setEmployeeGrade(select.getAttribute("data-id"), select.value);
+                renderTable();
+            });
+        });
+        document.querySelectorAll(".removeEmp").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                if (!confirm("Rétrograder cet employé en simple client ?")) return;
+                await demoteEmployeeToClient(btn.getAttribute("data-id"));
+                renderTable();
+            });
+        });
+    }
+
+    document.getElementById("employeeForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const errorBox = document.getElementById("empError");
+        const successBox = document.getElementById("empSuccess");
+        errorBox.classList.add("hidden");
+        successBox.classList.add("hidden");
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        const result = await promoteClientToEmployee(
+            document.getElementById("empEmail").value,
+            gradeSelect.value,
+            document.getElementById("empPhone").value
+        );
+
+        submitBtn.disabled = false;
+
+        if (!result.ok) {
+            errorBox.textContent = result.error;
+            errorBox.classList.remove("hidden");
+            return;
+        }
+
+        successBox.textContent = "Compte promu employé avec succès.";
+        successBox.classList.remove("hidden");
+        document.getElementById("employeeForm").reset();
+        renderTable();
+    });
+
+    renderTable();
+});
+</script>
+
+</body>
+</html>

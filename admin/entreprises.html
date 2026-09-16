@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Entreprises — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Entreprises</h1>
+        <p class="section-subtitle">Demandes de contrat APEX BUSINESS reçues depuis le site public. La personne doit d'abord créer son propre compte via Inscription ; rattache-le ensuite ici par e-mail.</p>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead>
+                    <tr><th>Entreprise</th><th>Gestionnaire</th><th>E-mail</th><th>Flotte souhaitée</th><th>Statut</th><th>Grade</th><th>Compte</th><th>Action</th></tr>
+                </thead>
+                <tbody id="bizBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE RATTACHEMENT DE COMPTE ENTREPRISE -->
+<div class="modal-overlay" id="accountModalOverlay">
+    <div class="modal">
+        <button class="modal-close" id="closeAccountModalBtn">&times;</button>
+        <h2 class="section-title" style="font-size:20px;">Rattacher le compte entreprise</h2>
+        <p class="text-silver mt-1" style="font-size:12px;" id="accountModalCompany"></p>
+
+        <div id="accountModalError" class="form-error hidden mt-3"></div>
+
+        <form id="accountForm" class="mt-3">
+            <input type="hidden" id="accReqId">
+            <div class="form-group">
+                <label for="accEmailField">E-mail du compte déjà créé</label>
+                <input type="email" id="accEmailField" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Rattacher le compte</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("entreprises.html");
+    if (!userHasPermission(user, "entreprises", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "entreprises", "edit");
+
+    const overlay = document.getElementById("accountModalOverlay");
+
+    function openAccountModal(req) {
+        document.getElementById("accountForm").reset();
+        document.getElementById("accountModalError").classList.add("hidden");
+        document.getElementById("accReqId").value = req.id;
+        document.getElementById("accountModalCompany").textContent = req.companyName + " — " + req.managerName;
+        document.getElementById("accEmailField").value = req.email;
+        overlay.classList.add("open");
+    }
+    document.getElementById("closeAccountModalBtn").addEventListener("click", function () { overlay.classList.remove("open"); });
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.classList.remove("open"); });
+
+    document.getElementById("accountForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const reqId = document.getElementById("accReqId").value;
+        const errorBox = document.getElementById("accountModalError");
+        errorBox.classList.add("hidden");
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        const requests = await getBusinessRequests();
+        const req = requests.find(function (r) { return r.id === reqId; });
+
+        const result = await promoteClientToBusiness(
+            document.getElementById("accEmailField").value,
+            req.companyName,
+            req.id
+        );
+
+        submitBtn.disabled = false;
+
+        if (!result.ok) {
+            errorBox.textContent = result.error;
+            errorBox.classList.remove("hidden");
+            return;
+        }
+
+        overlay.classList.remove("open");
+        renderTable();
+    });
+
+    async function renderTable() {
+        const requests = await getBusinessRequests();
+
+        document.getElementById("bizBody").innerHTML = requests.length
+            ? requests.map(function (r) {
+                const badgeClass = r.status === "approved" ? "badge-available" : (r.status === "declined" ? "badge-unavailable" : "badge-maintenance");
+                const statusLabel = r.status === "approved" ? "Validée" : (r.status === "declined" ? "Refusée" : "Nouvelle");
+                const hasAccount = !!r.accountUserId;
+                return (
+                    '<tr>' +
+                    '<td>' + r.companyName + '</td>' +
+                    '<td>' + r.managerName + '</td>' +
+                    '<td>' + r.email + '</td>' +
+                    '<td>' + r.fleetSize + ' véhicule(s)</td>' +
+                    '<td><span class="badge ' + badgeClass + '">' + statusLabel + '</span></td>' +
+                    '<td><select data-id="' + r.id + '" class="gradeSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' +
+                    BUSINESS_GRADES.map(function (g) { return '<option value="' + g + '"' + (g === r.grade ? ' selected' : '') + '>' + g + '</option>'; }).join("") +
+                    '</select></td>' +
+                    '<td>' + (hasAccount ? '<span class="badge badge-available">Compte rattaché</span>' : '<span class="badge badge-unavailable">Aucun compte</span>') + '</td>' +
+                    '<td style="white-space:nowrap;">' +
+                    (canEdit
+                        ? (r.status === "approved" && !hasAccount ? '  <button class="btn btn-outline btn-sm createAccountBiz" data-id="' + r.id + '">Rattacher un compte</button> ' : '') +
+                          (r.status !== "approved" ? '  <button class="btn btn-outline btn-sm approveBiz" data-id="' + r.id + '">Valider</button> ' : '') +
+                          (r.status !== "declined" ? '  <button class="btn btn-outline btn-sm declineBiz" data-id="' + r.id + '">Refuser</button>' : '')
+                        : '—') +
+                    '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="8" class="text-silver">Aucune demande pour le moment.</td></tr>';
+
+        document.querySelectorAll(".gradeSelect").forEach(function (select) {
+            select.addEventListener("change", async function () {
+                await setBusinessRequestGrade(select.getAttribute("data-id"), select.value);
+            });
+        });
+
+        document.querySelectorAll(".approveBiz").forEach(function (btn) {
+            btn.addEventListener("click", async function () { await setBusinessRequestStatus(btn.getAttribute("data-id"), "approved"); renderTable(); });
+        });
+        document.querySelectorAll(".declineBiz").forEach(function (btn) {
+            btn.addEventListener("click", async function () { await setBusinessRequestStatus(btn.getAttribute("data-id"), "declined"); renderTable(); });
+        });
+        document.querySelectorAll(".createAccountBiz").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                const req = requests.find(function (r) { return r.id === btn.getAttribute("data-id"); });
+                openAccountModal(req);
+            });
+        });
+    }
+
+    renderTable();
+});
+</script>
+
+</body>
+</html>

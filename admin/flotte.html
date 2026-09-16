@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Flotte — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+<style>
+    .modal-lg { max-width: 620px; }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+                <h1 class="section-title">Gestion de la flotte</h1>
+                <p class="section-subtitle">Ajoute, modifie ou supprime un véhicule. Les changements sont immédiats sur le site public.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" id="addVehicleBtn">+ Ajouter un véhicule</button>
+        </div>
+
+        <div class="form-group mt-3" style="max-width:320px;">
+            <label for="fleetSearch">Rechercher</label>
+            <input type="text" id="fleetSearch" placeholder="Nom du véhicule...">
+        </div>
+
+        <div class="table-wrap mt-2">
+            <table class="table">
+                <thead>
+                    <tr><th>Photo</th><th>Véhicule</th><th>Catégorie</th><th>Prix 24h</th><th>Caution</th><th>Statut</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="fleetTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODALE AJOUT / MODIFICATION -->
+<div class="modal-overlay" id="vehicleModalOverlay">
+    <div class="modal modal-lg">
+        <button class="modal-close" id="closeModalBtn">&times;</button>
+        <h2 class="section-title" id="modalTitle" style="font-size:20px;">Ajouter un véhicule</h2>
+        <form id="vehicleForm" class="mt-3">
+            <input type="hidden" id="vehicleEditId">
+            <input type="hidden" id="vImageData">
+
+            <div class="form-group">
+                <label for="vImageFile">Photo du véhicule</label>
+                <input type="file" id="vImageFile" accept="image/*">
+                <div class="mt-2" id="imagePreviewWrap" style="display:none;">
+                    <img id="imagePreview" style="width:100%; max-height:180px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,0.1);">
+                    <button type="button" id="removeImageBtn" class="btn btn-outline btn-sm mt-1">Retirer la photo</button>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="vName">Nom</label>
+                    <input type="text" id="vName" required>
+                </div>
+                <div class="form-group">
+                    <label for="vCategory">Catégorie</label>
+                    <select id="vCategory" required></select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label for="vPower">Puissance (hp)</label><input type="number" id="vPower" min="0"></div>
+                <div class="form-group"><label for="vTopSpeed">Vitesse max (km/h)</label><input type="number" id="vTopSpeed" min="0"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="vTransmission">Transmission</label>
+                    <select id="vTransmission">
+                        <option value="Automatique">Automatique</option>
+                        <option value="Manuelle">Manuelle</option>
+                    </select>
+                </div>
+                <div class="form-group"><label for="vSeats">Places</label><input type="number" id="vSeats" min="1" max="9"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label for="vPrice4h">Prix 4h ($)</label><input type="number" id="vPrice4h" min="0"></div>
+                <div class="form-group"><label for="vPrice24h">Prix 24h ($)</label><input type="number" id="vPrice24h" min="0"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label for="vPrice7d">Prix 7 jours ($)</label><input type="number" id="vPrice7d" min="0"></div>
+                <div class="form-group"><label for="vDeposit">Caution ($)</label><input type="number" id="vDeposit" min="0"></div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block mt-2" id="vehicleFormSubmit">Ajouter le véhicule</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("flotte.html");
+    if (!userHasPermission(user, "flotte", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "flotte", "edit");
+    if (!canEdit) document.getElementById("addVehicleBtn").style.display = "none";
+
+    const tbody = document.getElementById("fleetTableBody");
+    const search = document.getElementById("fleetSearch");
+    const overlay = document.getElementById("vehicleModalOverlay");
+    const form = document.getElementById("vehicleForm");
+    const categorySelect = document.getElementById("vCategory");
+
+    CATEGORIES.forEach(function (c) {
+        const opt = document.createElement("option");
+        opt.value = c.code;
+        opt.textContent = c.label;
+        categorySelect.appendChild(opt);
+    });
+
+    const imageFileInput = document.getElementById("vImageFile");
+    const imageDataInput = document.getElementById("vImageData");
+    const imagePreviewWrap = document.getElementById("imagePreviewWrap");
+    const imagePreview = document.getElementById("imagePreview");
+
+    function setImagePreview(dataUrl) {
+        imageDataInput.value = dataUrl || "";
+        if (dataUrl) {
+            imagePreview.src = dataUrl;
+            imagePreviewWrap.style.display = "block";
+        } else {
+            imagePreviewWrap.style.display = "none";
+        }
+    }
+
+    imageFileInput.addEventListener("change", function () {
+        const file = imageFileInput.files[0];
+        if (!file) return;
+        readImageAsCompressedDataURL(file, function (dataUrl) {
+            setImagePreview(dataUrl);
+        });
+    });
+
+    document.getElementById("removeImageBtn").addEventListener("click", function () {
+        imageFileInput.value = "";
+        setImagePreview(null);
+    });
+
+    function openModal(vehicle) {
+        form.reset();
+        setImagePreview(vehicle && vehicle.image ? vehicle.image : null);
+        document.getElementById("vehicleEditId").value = vehicle ? vehicle.id : "";
+        document.getElementById("modalTitle").textContent = vehicle ? "Modifier " + vehicle.name : "Ajouter un véhicule";
+        document.getElementById("vehicleFormSubmit").textContent = vehicle ? "Enregistrer les modifications" : "Ajouter le véhicule";
+
+        if (vehicle) {
+            document.getElementById("vName").value = vehicle.name;
+            categorySelect.value = vehicle.category;
+            document.getElementById("vPower").value = vehicle.power;
+            document.getElementById("vTopSpeed").value = vehicle.topSpeed;
+            document.getElementById("vTransmission").value = vehicle.transmission;
+            document.getElementById("vSeats").value = vehicle.seats;
+            document.getElementById("vPrice4h").value = vehicle.price4h;
+            document.getElementById("vPrice24h").value = vehicle.price24h;
+            document.getElementById("vPrice7d").value = vehicle.price7d;
+            document.getElementById("vDeposit").value = vehicle.deposit;
+        }
+        overlay.classList.add("open");
+    }
+
+    function closeModal() {
+        overlay.classList.remove("open");
+    }
+
+    document.getElementById("addVehicleBtn").addEventListener("click", function () { openModal(null); });
+    document.getElementById("closeModalBtn").addEventListener("click", closeModal);
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) closeModal(); });
+
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const editId = document.getElementById("vehicleEditId").value;
+        const submitBtn = document.getElementById("vehicleFormSubmit");
+        submitBtn.disabled = true;
+        const fields = {
+            name: document.getElementById("vName").value,
+            category: categorySelect.value,
+            power: parseInt(document.getElementById("vPower").value, 10) || 0,
+            topSpeed: parseInt(document.getElementById("vTopSpeed").value, 10) || 0,
+            transmission: document.getElementById("vTransmission").value,
+            seats: parseInt(document.getElementById("vSeats").value, 10) || 4,
+            price4h: parseInt(document.getElementById("vPrice4h").value, 10) || 0,
+            price24h: parseInt(document.getElementById("vPrice24h").value, 10) || 0,
+            price7d: parseInt(document.getElementById("vPrice7d").value, 10) || 0,
+            deposit: parseInt(document.getElementById("vDeposit").value, 10) || 0,
+            image: imageDataInput.value || ""
+        };
+
+        if (editId) {
+            await updateVehicleFields(editId, fields);
+        } else {
+            await addCustomVehicle(fields);
+        }
+        submitBtn.disabled = false;
+        closeModal();
+        renderRows();
+    });
+
+    async function renderRows() {
+        const q = search.value.trim().toLowerCase();
+        const allVehicles = await getAllVehicles();
+        const list = allVehicles.filter(function (v) { return v.name.toLowerCase().indexOf(q) !== -1; });
+
+        tbody.innerHTML = list.map(function (v) {
+            const status = v.status;
+            const options = VEHICLE_STATUSES.map(function (s) {
+                return '<option value="' + s.code + '"' + (s.code === status ? ' selected' : '') + '>' + s.label + '</option>';
+            }).join("");
+            const meta = getStatusMeta(status);
+
+            return (
+                '<tr>' +
+                '<td>' + (v.image ? '<img src="' + v.image + '" alt="" style="width:56px; height:36px; object-fit:cover; border-radius:4px;">' : '<span class="text-silver" style="font-size:11px;">—</span>') + '</td>' +
+                '<td>' + v.name + '</td>' +
+                '<td>' + getCategoryLabel(v.category) + '</td>' +
+                '<td>' + v.price24h.toLocaleString("fr-FR") + ' $</td>' +
+                '<td>' + v.deposit.toLocaleString("fr-FR") + ' $</td>' +
+                '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                '<td style="white-space:nowrap;">' +
+                '  <select data-id="' + v.id + '" class="statusSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px; margin-right:6px;">' + options + '</select>' +
+                (canEdit
+                    ? '  <button class="btn btn-outline btn-sm editVehicle" data-id="' + v.id + '">Modifier</button> ' +
+                      '  <button class="btn btn-outline btn-sm deleteVehicle" data-id="' + v.id + '">Supprimer</button>'
+                    : '') +
+                '</td>' +
+                '</tr>'
+            );
+        }).join("");
+
+        tbody.querySelectorAll(".statusSelect").forEach(function (select) {
+            select.addEventListener("change", async function () {
+                select.disabled = true;
+                await setVehicleStatus(select.getAttribute("data-id"), select.value);
+                renderRows();
+            });
+        });
+        tbody.querySelectorAll(".editVehicle").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                const v = await getVehicleById(btn.getAttribute("data-id"));
+                openModal(v);
+            });
+        });
+        tbody.querySelectorAll(".deleteVehicle").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                const v = list.find(function (x) { return x.id === btn.getAttribute("data-id"); });
+                if (v && confirm("Supprimer définitivement " + v.name + " de la flotte ?")) {
+                    await deleteVehicle(v.id);
+                    renderRows();
+                }
+            });
+        });
+    }
+
+    search.addEventListener("input", renderRows);
+    renderRows();
+});
+</script>
+
+</body>
+</html>

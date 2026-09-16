@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Confirmation — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main class="section">
+    <div class="container" style="max-width:560px; text-align:center;" id="confirmContainer"></div>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    const { data: row } = await supabaseClient.from("reservations").select("*").eq("reference", ref).maybeSingle();
+    const reservation = row ? mapReservationRow(row) : null;
+    const container = document.getElementById("confirmContainer");
+
+    if (!reservation) {
+        container.innerHTML =
+            '<p class="text-silver">Réservation introuvable.</p>' +
+            '<a href="vehicules.html" class="btn btn-outline mt-3">Retour au catalogue</a>';
+        return;
+    }
+
+    const tierLabel = reservation.appliedClubTier ? (await getEffectiveClubTierInfo(reservation.appliedClubTier)).label : "";
+
+    container.innerHTML =
+        '<div style="font-size:40px;">✓</div>' +
+        '<h1 class="section-title mt-2">Réservation confirmée</h1>' +
+        '<p class="text-silver mt-1">Numéro de réservation</p>' +
+        '<p style="font-family:var(--font-display); font-size:32px; color:var(--apex-red); letter-spacing:.06em;">' + reservation.reference + '</p>' +
+        '<div class="card mt-3" style="text-align:left;">' +
+        '  <div class="summary-row-line"><strong>' + reservation.vehicleName + '</strong></div>' +
+        '  <p class="text-silver mt-1" style="font-size:13px;">Départ : ' + reservation.startDate + ' à ' + reservation.startTime + '</p>' +
+        '  <p class="text-silver" style="font-size:13px;">Retour : ' + reservation.endDate + ' à ' + reservation.endTime + '</p>' +
+        '  <p class="text-silver mt-2" style="font-size:13px;">Total payé : <strong style="color:var(--apex-white);">' + reservation.total.toLocaleString("fr-FR") + ' $</strong></p>' +
+        '  <p class="text-silver" style="font-size:13px;">Caution : ' + reservation.deposit.toLocaleString("fr-FR") + ' $</p>' +
+        (reservation.appliedClubTier
+            ? '  <p class="text-red mt-1" style="font-size:12px;">✓ Avantages ' + tierLabel + ' appliqués : ' +
+              [
+                reservation.rentalDiscountPercent > 0 ? '-' + reservation.rentalDiscountPercent + '% sur la location' : '',
+                reservation.insuranceSavings > 0 ? 'assurance offerte (-' + reservation.insuranceSavings.toLocaleString("fr-FR") + ' $)' : '',
+                reservation.deliverySavings > 0 ? 'livraison offerte (-' + reservation.deliverySavings.toLocaleString("fr-FR") + ' $)' : ''
+              ].filter(function (s) { return s; }).join(', ') +
+              '</p>'
+            : '') +
+        '</div>' +
+        '<a href="client/dashboard.html" class="btn btn-primary mt-3 btn-block">Voir mon espace client</a>' +
+        '<a href="vehicules.html" class="btn btn-outline mt-2 btn-block">Retour au catalogue</a>';
+});
+</script>
+
+</body>
+</html>

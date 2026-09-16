@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Finances — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Finances</h1>
+        <p class="section-subtitle">Chiffre d'affaires calculé à partir des réservations enregistrées.</p>
+
+        <div class="grid grid-4 mt-3">
+            <div class="dashboard-card"><div class="stat-label">CA du jour</div><div class="stat-value" id="caDay" style="font-size:22px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">CA de la semaine</div><div class="stat-value red" id="caWeek" style="font-size:22px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">CA du mois</div><div class="stat-value green" id="caMonth" style="font-size:22px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Cautions engagées</div><div class="stat-value orange" id="caDeposits" style="font-size:22px;">0 $</div></div>
+        </div>
+
+        <div class="grid grid-2 mt-3">
+            <div class="dashboard-card"><div class="stat-label">Revenu location</div><div class="stat-value" id="revRental" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Revenu assurance + livraison</div><div class="stat-value" id="revExtras" style="font-size:20px;">0 $</div></div>
+        </div>
+
+        <div class="dashboard-card mt-3"><div class="stat-label">Revenu réparations (incidents facturés)</div><div class="stat-value orange" id="revRepairs" style="font-size:20px;">0 $</div></div>
+
+        <h2 class="section-title mt-4" style="font-size:18px;">Réparations facturées</h2>
+        <div class="table-wrap mt-2">
+            <table class="table">
+                <thead><tr><th>Incident</th><th>Montant</th><th>Date</th></tr></thead>
+                <tbody id="repairsBody"></tbody>
+            </table>
+        </div>
+
+        <hr style="border-color: rgba(255,255,255,0.08); margin: 40px 0;">
+
+        <h2 class="section-title" style="font-size:20px;">Comptabilité</h2>
+        <p class="section-subtitle">Paie employé, primes, impôts et autres charges — déduits automatiquement du bénéfice net.</p>
+
+        <div class="grid grid-2 mt-3">
+            <div class="dashboard-card"><div class="stat-label">Total charges comptables</div><div class="stat-value orange" id="totalCharges" style="font-size:22px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Bénéfice net (CA - charges)</div><div class="stat-value green" id="netProfit" style="font-size:22px;">0 $</div></div>
+        </div>
+
+        <div class="card mt-3" style="max-width:640px;" id="accountingFormCard">
+            <h3 style="font-size:14px; color:var(--apex-white);">Ajouter une écriture comptable</h3>
+            <form id="accountingForm" class="mt-2">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="accCategory">Catégorie</label>
+                        <select id="accCategory"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="accEmployee">Employé concerné (optionnel)</label>
+                        <select id="accEmployee"><option value="">—</option></select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="accLabel">Libellé</label>
+                        <input type="text" id="accLabel" placeholder="ex : Paie de septembre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="accAmount">Montant ($)</label>
+                        <input type="number" id="accAmount" min="0" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="accDate">Date</label>
+                    <input type="date" id="accDate">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Ajouter l'écriture</button>
+            </form>
+        </div>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead><tr><th>Catégorie</th><th>Libellé</th><th>Employé</th><th>Montant</th><th>Date</th><th>Actions</th></tr></thead>
+                <tbody id="accountingBody"></tbody>
+            </table>
+        </div>
+
+        <h2 class="section-title mt-4" style="font-size:18px;">Toutes les transactions</h2>
+        <div class="table-wrap mt-2">
+            <table class="table">
+                <thead><tr><th>Référence</th><th>Date</th><th>Véhicule</th><th>Location</th><th>Extras</th><th>Total</th><th>Caution</th></tr></thead>
+                <tbody id="financeBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("finances.html");
+    if (!userHasPermission(user, "finances", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "finances", "edit");
+
+    const reservations = await getAllReservations();
+    const financeEntries = getFinanceEntries();
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    function sumSince(date) {
+        const fromReservations = reservations
+            .filter(function (r) { return new Date(r.createdAt) >= date; })
+            .reduce(function (sum, r) { return sum + r.total; }, 0);
+        const fromEntries = financeEntries
+            .filter(function (e) { return new Date(e.createdAt) >= date; })
+            .reduce(function (sum, e) { return sum + e.amount; }, 0);
+        return fromReservations + fromEntries;
+    }
+
+    document.getElementById("caDay").textContent = sumSince(startOfDay).toLocaleString("fr-FR") + " $";
+    document.getElementById("caWeek").textContent = sumSince(startOfWeek).toLocaleString("fr-FR") + " $";
+    document.getElementById("caMonth").textContent = sumSince(startOfMonth).toLocaleString("fr-FR") + " $";
+    document.getElementById("caDeposits").textContent = reservations.reduce(function (sum, r) { return sum + (r.deposit || 0); }, 0).toLocaleString("fr-FR") + " $";
+    document.getElementById("revRental").textContent = reservations.reduce(function (sum, r) { return sum + (r.rentalPrice || 0); }, 0).toLocaleString("fr-FR") + " $";
+    document.getElementById("revExtras").textContent = reservations.reduce(function (sum, r) { return sum + (r.insurancePrice || 0) + (r.deliveryPrice || 0); }, 0).toLocaleString("fr-FR") + " $";
+    document.getElementById("revRepairs").textContent = financeEntries.reduce(function (sum, e) { return sum + e.amount; }, 0).toLocaleString("fr-FR") + " $";
+
+    const repairRows = financeEntries.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).map(function (e) {
+        return '<tr><td>' + e.label + '</td><td>' + e.amount.toLocaleString("fr-FR") + ' $</td><td>' + isoToLocalDateKey(e.createdAt) + '</td></tr>';
+    }).join("");
+    document.getElementById("repairsBody").innerHTML = repairRows || '<tr><td colspan="3" class="text-silver">Aucune réparation facturée.</td></tr>';
+
+    // ---- COMPTABILITÉ ----
+    if (!canEdit) document.getElementById("accountingFormCard").style.display = "none";
+
+    const accCategory = document.getElementById("accCategory");
+    ACCOUNTING_CATEGORIES.forEach(function (c) {
+        const opt = document.createElement("option");
+        opt.value = c.code;
+        opt.textContent = c.label;
+        accCategory.appendChild(opt);
+    });
+
+    const accEmployee = document.getElementById("accEmployee");
+    getEmployeeUsers().forEach(function (e) {
+        const opt = document.createElement("option");
+        opt.value = e.id;
+        opt.textContent = e.firstName + " " + e.lastName;
+        accEmployee.appendChild(opt);
+    });
+
+    document.getElementById("accDate").value = todayLocalKey();
+
+    function renderAccounting() {
+        const entries = getAccountingEntries();
+        const totalCharges = entries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+        const totalRevenue = reservations.reduce(function (sum, r) { return sum + r.total; }, 0) + financeEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+
+        document.getElementById("totalCharges").textContent = totalCharges.toLocaleString("fr-FR") + " $";
+        document.getElementById("netProfit").textContent = (totalRevenue - totalCharges).toLocaleString("fr-FR") + " $";
+
+        const sorted = entries.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+        document.getElementById("accountingBody").innerHTML = sorted.length
+            ? sorted.map(function (e) {
+                return (
+                    '<tr>' +
+                    '<td>' + getAccountingCategoryLabel(e.category) + '</td>' +
+                    '<td>' + e.label + '</td>' +
+                    '<td>' + (e.employeeName || '—') + '</td>' +
+                    '<td>' + e.amount.toLocaleString("fr-FR") + ' $</td>' +
+                    '<td>' + e.date + '</td>' +
+                    '<td>' + (canEdit ? '<button class="btn btn-outline btn-sm removeAcc" data-id="' + e.id + '">Retirer</button>' : '—') + '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="6" class="text-silver">Aucune écriture comptable pour le moment.</td></tr>';
+
+        document.querySelectorAll(".removeAcc").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                removeAccountingEntry(btn.getAttribute("data-id"));
+                renderAccounting();
+            });
+        });
+    }
+
+    document.getElementById("accountingForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        const employeeOption = accEmployee.options[accEmployee.selectedIndex];
+        addAccountingEntry({
+            category: accCategory.value,
+            employeeId: accEmployee.value,
+            employeeName: accEmployee.value ? employeeOption.textContent : "",
+            label: document.getElementById("accLabel").value,
+            amount: parseInt(document.getElementById("accAmount").value, 10) || 0,
+            date: document.getElementById("accDate").value
+        });
+        document.getElementById("accountingForm").reset();
+        document.getElementById("accDate").value = todayLocalKey();
+        renderAccounting();
+    });
+
+    renderAccounting();
+
+    const rows = reservations.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).map(function (r) {
+        return (
+            '<tr>' +
+            '<td>' + r.reference + '</td>' +
+            '<td>' + isoToLocalDateKey(r.createdAt) + '</td>' +
+            '<td>' + r.vehicleName + '</td>' +
+            '<td>' + r.rentalPrice.toLocaleString("fr-FR") + ' $</td>' +
+            '<td>' + (r.insurancePrice + r.deliveryPrice).toLocaleString("fr-FR") + ' $</td>' +
+            '<td>' + r.total.toLocaleString("fr-FR") + ' $</td>' +
+            '<td>' + r.deposit.toLocaleString("fr-FR") + ' $</td>' +
+            '</tr>'
+        );
+    }).join("");
+
+    document.getElementById("financeBody").innerHTML = rows || '<tr><td colspan="7" class="text-silver">Aucune transaction enregistrée.</td></tr>';
+});
+</script>
+
+</body>
+</html>

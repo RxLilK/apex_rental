@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nos véhicules — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm">
+        <div class="container">
+            <h1 class="section-title">Nos véhicules</h1>
+            <p class="section-subtitle" id="resultCount"></p>
+        </div>
+    </section>
+
+    <section class="section-sm" style="padding-top:0;">
+        <div class="container">
+            <div class="card">
+                <div class="grid grid-4" style="align-items:end;">
+                    <div class="field">
+                        <label for="fCategory">Catégorie</label>
+                        <select id="fCategory">
+                            <option value="">Toutes</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="fPrice">Prix maximum (24h)</label>
+                        <select id="fPrice">
+                            <option value="">Tous budgets</option>
+                            <option value="2000">Moins de 2 000 $</option>
+                            <option value="6000">Moins de 6 000 $</option>
+                            <option value="18000">Moins de 18 000 $</option>
+                            <option value="999999">Plus de 18 000 $</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="fSeats">Places minimum</label>
+                        <select id="fSeats">
+                            <option value="">Toutes</option>
+                            <option value="2">2+</option>
+                            <option value="4">4+</option>
+                            <option value="5">5+</option>
+                            <option value="7">7+</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="fTransmission">Transmission</label>
+                        <select id="fTransmission">
+                            <option value="">Toutes</option>
+                            <option value="Manuelle">Manuelle</option>
+                            <option value="Automatique">Automatique</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-2 mt-3" style="align-items:end;">
+                    <div class="field">
+                        <label for="fSearch">Rechercher un véhicule...</label>
+                        <input type="text" id="fSearch" placeholder="Ex : Sultan, Banshee...">
+                    </div>
+                    <div class="field">
+                        <label for="fAvailable">Disponibilité</label>
+                        <select id="fAvailable">
+                            <option value="">Tous</option>
+                            <option value="true">Disponibles uniquement</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section" style="padding-top:32px;">
+        <div class="container">
+            <div class="grid grid-4" id="vehicleGrid"></div>
+        </div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const fCategory = document.getElementById("fCategory");
+    const fPrice = document.getElementById("fPrice");
+    const fSeats = document.getElementById("fSeats");
+    const fTransmission = document.getElementById("fTransmission");
+    const fSearch = document.getElementById("fSearch");
+    const fAvailable = document.getElementById("fAvailable");
+    const grid = document.getElementById("vehicleGrid");
+    const resultCount = document.getElementById("resultCount");
+
+    grid.innerHTML = '<p class="text-silver">Chargement des véhicules...</p>';
+    const allVehicles = await getAllVehicles();
+
+    CATEGORIES.forEach(function (c) {
+        const opt = document.createElement("option");
+        opt.value = c.code;
+        opt.textContent = c.label;
+        fCategory.appendChild(opt);
+    });
+
+    // Pré-remplissage depuis la query string (venant de l'accueil ou du footer)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("cat")) fCategory.value = params.get("cat");
+    if (params.get("budget")) fPrice.value = params.get("budget");
+
+    function applyFilters() {
+        let list = allVehicles;
+
+        if (fCategory.value) list = list.filter(function (v) { return v.category === fCategory.value; });
+        if (fPrice.value) list = list.filter(function (v) { return v.price24h <= parseInt(fPrice.value, 10); });
+        if (fSeats.value) list = list.filter(function (v) { return v.seats >= parseInt(fSeats.value, 10); });
+        if (fTransmission.value) list = list.filter(function (v) { return v.transmission === fTransmission.value; });
+        if (fAvailable.value) list = list.filter(function (v) { return String(v.available) === fAvailable.value; });
+        if (fSearch.value.trim()) {
+            const q = fSearch.value.trim().toLowerCase();
+            list = list.filter(function (v) { return v.name.toLowerCase().indexOf(q) !== -1; });
+        }
+
+        renderVehicleGrid(grid, list);
+        resultCount.textContent = list.length + " véhicule" + (list.length > 1 ? "s" : "") + " disponible" + (list.length > 1 ? "s" : "") + " dans la flotte APEX RENTAL.";
+    }
+
+    [fCategory, fPrice, fSeats, fTransmission, fAvailable].forEach(function (el) {
+        el.addEventListener("change", applyFilters);
+    });
+    fSearch.addEventListener("input", applyFilters);
+
+    applyFilters();
+});
+</script>
+
+</body>
+</html>

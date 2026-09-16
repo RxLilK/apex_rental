@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tarifs — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm">
+        <div class="container">
+            <h1 class="section-title">Tarifs</h1>
+            <p class="section-subtitle">Les prix varient selon la catégorie du véhicule. Assurance et livraison sont facturées en supplément.</p>
+        </div>
+    </section>
+
+    <section class="section" style="padding-top:0;">
+        <div class="container grid grid-2" id="pricingGrid"></div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const grid = document.getElementById("pricingGrid");
+
+    grid.innerHTML = CATEGORIES.filter(function (c) { return c.code !== "EVENT"; }).map(function (c) {
+        const p = getEffectivePricing(c.code);
+        return (
+            '<div class="card reveal">' +
+            '  <h3 style="font-size:16px; color:var(--apex-white);">' + c.label + '</h3>' +
+            '  <div class="grid grid-3 mt-2" style="text-align:center;">' +
+            '    <div><div style="font-family:var(--font-heading); font-size:18px;">' + p.price4h.toLocaleString("fr-FR") + ' $</div><div class="text-silver" style="font-size:10px; text-transform:uppercase;">4h</div></div>' +
+            '    <div><div style="font-family:var(--font-heading); font-size:18px; color:var(--apex-red);">' + p.price24h.toLocaleString("fr-FR") + ' $</div><div class="text-silver" style="font-size:10px; text-transform:uppercase;">24h</div></div>' +
+            '    <div><div style="font-family:var(--font-heading); font-size:18px;">' + p.price7d.toLocaleString("fr-FR") + ' $</div><div class="text-silver" style="font-size:10px; text-transform:uppercase;">7 jours</div></div>' +
+            '  </div>' +
+            '  <p class="text-silver mt-2" style="font-size:12px;">Caution : ' + p.depositMin.toLocaleString("fr-FR") + ' à ' + p.depositMax.toLocaleString("fr-FR") + ' $</p>' +
+            '  <a href="vehicules.html?cat=' + c.code + '" class="btn btn-outline btn-sm mt-2">Voir les véhicules</a>' +
+            '</div>'
+        );
+    }).join("") +
+    '<div class="card reveal">' +
+    '  <h3 style="font-size:16px; color:var(--apex-white);">Apex Event</h3>' +
+    '  <p class="text-silver mt-2" style="font-size:13px;">Prix sur devis selon le véhicule, la durée, le nombre de véhicules, la livraison et la décoration éventuelle.</p>' +
+    '  <a href="media.html" class="btn btn-outline btn-sm mt-2">Demander un devis</a>' +
+    '</div>';
+
+    initScrollReveal();
+});
+</script>
+
+</body>
+</html>

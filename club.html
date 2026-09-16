@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Club — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+<style>
+    .perk-list li { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:rgba(245,245,245,0.85); margin-bottom:10px; }
+    .perk-list li::before { content:"✓"; color:var(--apex-red); font-weight:bold; }
+    .plan-card { text-align:left; }
+    .plan-card.black { border-color: rgba(var(--apex-red-rgb),0.4); }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm text-center">
+        <div class="container">
+            <h1 class="section-title">Apex Club &amp; Apex Black</h1>
+            <p class="section-subtitle" style="margin:0 auto;">Deux paliers d'adhésion pour une expérience de location sans compromis.</p>
+        </div>
+    </section>
+
+    <section class="section" style="padding-top:0;">
+        <div class="container grid grid-2" id="plansGrid"></div>
+
+        <div class="container text-center mt-4">
+            <p class="text-silver" style="font-size:13px;">L'abonnement nécessite un compte APEX RENTAL.</p>
+            <a href="#" id="clubCta" class="btn btn-primary mt-2">Se connecter pour s'abonner</a>
+        </div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    await initSupabaseSession();
+    const base = getRelativePath("");
+    const user = getCurrentUser();
+    const cta = document.getElementById("clubCta");
+    if (user) {
+        cta.textContent = "Gérer mon abonnement";
+        cta.href = base + "client/abonnement.html";
+    } else {
+        cta.href = base + "connexion.html?redirect=" + encodeURIComponent("club.html");
+    }
+
+    const [club, black] = await Promise.all([getEffectiveClubTierInfo("apex-club"), getEffectiveClubTierInfo("apex-black")]);
+
+    function planCard(tier, colorClass, extraClass) {
+        return (
+            '<div class="card plan-card ' + extraClass + ' reveal">' +
+            '  <span class="' + colorClass + '" style="font-family:var(--font-heading); font-size:16px;">' + tier.label.toUpperCase() + '</span>' +
+            '  <p style="font-family:var(--font-display); font-size:32px; margin-top:6px;">' + tier.pricePerWeek.toLocaleString("fr-FR") + ' $<span style="font-family:var(--font-body); font-size:12px; color:var(--apex-silver);"> / semaine</span></p>' +
+            '  <ul class="perk-list mt-3">' + tier.perks.map(function (p) { return '<li>' + p + '</li>'; }).join("") + '</ul>' +
+            '</div>'
+        );
+    }
+
+    document.getElementById("plansGrid").innerHTML =
+        planCard(club, "text-silver", "") +
+        planCard(black, "text-red", "black");
+
+    initScrollReveal();
+});
+</script>
+
+</body>
+</html>

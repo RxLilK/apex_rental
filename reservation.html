@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Réservation — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+<style>
+    .booking-panel { max-width: 640px; margin: 0 auto; }
+    .radio-card { display:flex; align-items:flex-start; gap:12px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:14px; margin-bottom:10px; cursor:pointer; transition:all .2s ease; }
+    .radio-card:hover { border-color: rgba(var(--apex-red-rgb),0.4); }
+    .radio-card.selected { border-color: var(--apex-red); background: rgba(var(--apex-red-rgb),0.06); }
+    .radio-card input { margin-top:3px; }
+    .radio-card .rc-title { font-family: var(--font-heading); font-size:14px; color: var(--apex-white); }
+    .radio-card .rc-desc { font-size:12px; color: rgba(184,188,194,0.7); margin-top:2px; }
+    .radio-card .rc-price { margin-left:auto; font-family: var(--font-heading); font-size:14px; color: var(--apex-white); white-space:nowrap; }
+    .summary-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px; }
+    .summary-row.total { font-family: var(--font-heading); font-size:16px; border-bottom:none; padding-top:16px; }
+    .summary-row.total .value { color: var(--apex-red); }
+    .step-panel { display:none; }
+    .step-panel.active { display:block; }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main class="section-sm">
+    <div class="container booking-panel">
+
+        <div id="authNotice" class="card hidden" style="text-align:center;">
+            <p class="text-silver">Un compte APEX RENTAL est nécessaire pour réserver.</p>
+            <div class="mt-2" style="display:flex; gap:12px; justify-content:center;">
+                <a href="connexion.html" id="loginLink" class="btn btn-primary btn-sm">Se connecter</a>
+                <a href="inscription.html" id="registerLink" class="btn btn-outline btn-sm">Créer un compte</a>
+            </div>
+        </div>
+
+        <div id="bookingFlow" class="hidden">
+            <div class="stepper" id="stepper">
+                <div class="step active" data-step="1"><div class="step-num">1</div><div class="step-label">Véhicule</div></div>
+                <div class="step" data-step="2"><div class="step-num">2</div><div class="step-label">Départ</div></div>
+                <div class="step" data-step="3"><div class="step-num">3</div><div class="step-label">Retour</div></div>
+                <div class="step" data-step="4"><div class="step-num">4</div><div class="step-label">Assurance</div></div>
+                <div class="step" data-step="5"><div class="step-num">5</div><div class="step-label">Livraison</div></div>
+                <div class="step" data-step="6"><div class="step-num">6</div><div class="step-label">Résumé</div></div>
+            </div>
+
+            <!-- ÉTAPE 1 : VÉHICULE -->
+            <div class="step-panel active" data-panel="1">
+                <h2 class="section-title" style="font-size:20px;">Choisis ton véhicule</h2>
+                <div class="field mt-2">
+                    <label for="stepVehicle">Véhicule</label>
+                    <select id="stepVehicle"></select>
+                </div>
+                <div id="vehiclePreview" class="mt-2"></div>
+            </div>
+
+            <!-- ÉTAPE 2 : DÉPART -->
+            <div class="step-panel" data-panel="2">
+                <h2 class="section-title" style="font-size:20px;">Date et heure de départ</h2>
+                <div class="form-row mt-2">
+                    <div class="field"><label for="startDate">Date</label><input type="date" id="startDate"></div>
+                    <div class="field"><label for="startTime">Heure</label><input type="time" id="startTime" value="10:00"></div>
+                </div>
+            </div>
+
+            <!-- ÉTAPE 3 : RETOUR -->
+            <div class="step-panel" data-panel="3">
+                <h2 class="section-title" style="font-size:20px;">Date et heure de retour</h2>
+                <div class="form-row mt-2">
+                    <div class="field"><label for="endDate">Date</label><input type="date" id="endDate"></div>
+                    <div class="field"><label for="endTime">Heure</label><input type="time" id="endTime" value="10:00"></div>
+                </div>
+                <p class="text-silver mt-2" id="durationLabel" style="font-size:12px;"></p>
+            </div>
+
+            <!-- ÉTAPE 4 : ASSURANCE -->
+            <div class="step-panel" data-panel="4">
+                <h2 class="section-title" style="font-size:20px;">Choisis ton assurance</h2>
+                <div id="insuranceOptions" class="mt-2"></div>
+            </div>
+
+            <!-- ÉTAPE 5 : LIVRAISON -->
+            <div class="step-panel" data-panel="5">
+                <h2 class="section-title" style="font-size:20px;">Livraison ou retrait</h2>
+                <div id="deliveryOptions" class="mt-2"></div>
+            </div>
+
+            <!-- ÉTAPE 6 : RÉSUMÉ -->
+            <div class="step-panel" data-panel="6">
+                <h2 class="section-title" style="font-size:20px;">Résumé de ta réservation</h2>
+                <div class="card mt-2" id="summaryCard"></div>
+            </div>
+
+            <div class="mt-3" style="display:flex; justify-content:space-between;">
+                <button class="btn btn-outline" id="prevBtn">Précédent</button>
+                <button class="btn btn-primary" id="nextBtn">Suivant</button>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    await initSupabaseSession();
+    const user = getCurrentUser();
+    const authNotice = document.getElementById("authNotice");
+    const bookingFlow = document.getElementById("bookingFlow");
+    const params = new URLSearchParams(window.location.search);
+    const preselectId = params.get("id");
+
+    if (!user) {
+        authNotice.classList.remove("hidden");
+        const redirectParam = "?redirect=" + encodeURIComponent(window.location.pathname + window.location.search);
+        document.getElementById("loginLink").href = "connexion.html" + redirectParam;
+        document.getElementById("registerLink").href = "inscription.html" + redirectParam;
+        return;
+    }
+
+    bookingFlow.classList.remove("hidden");
+
+    let currentStep = 1;
+    const totalSteps = 6;
+    const allVehicles = await getAllVehicles();
+    function findVehicle(id) { return allVehicles.find(function (v) { return v.id === id; }); }
+
+    const state = { vehicleId: preselectId || allVehicles[0].id, insurance: "basic", delivery: "agence" };
+
+    const stepVehicle = document.getElementById("stepVehicle");
+    allVehicles.forEach(function (v) {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = v.name + " — " + getCategoryLabel(v.category);
+        if (v.id === state.vehicleId) opt.selected = true;
+        stepVehicle.appendChild(opt);
+    });
+
+    function renderVehiclePreview() {
+        const v = findVehicle(stepVehicle.value);
+        document.getElementById("vehiclePreview").innerHTML = renderVehicleCard(v);
+    }
+    stepVehicle.addEventListener("change", function () {
+        state.vehicleId = stepVehicle.value;
+        renderVehiclePreview();
+    });
+    renderVehiclePreview();
+
+    // Dates par défaut
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    document.getElementById("startDate").value = toLocalDateKey(today);
+    document.getElementById("endDate").value = toLocalDateKey(tomorrow);
+
+    function getDurationHours() {
+        const start = new Date(document.getElementById("startDate").value + "T" + document.getElementById("startTime").value);
+        const end = new Date(document.getElementById("endDate").value + "T" + document.getElementById("endTime").value);
+        return Math.max(1, Math.round((end - start) / 3600000));
+    }
+
+    function updateDurationLabel() {
+        const hours = getDurationHours();
+        document.getElementById("durationLabel").textContent = "Durée estimée : " + hours + " heure" + (hours > 1 ? "s" : "");
+    }
+    ["startDate", "startTime", "endDate", "endTime"].forEach(function (id) {
+        document.getElementById(id).addEventListener("change", updateDurationLabel);
+    });
+    updateDurationLabel();
+
+    const tierInfo = await getEffectiveClubTierInfo(user.clubTier);
+
+    function pickRentalPrice(vehicle, hours) {
+        let base, label;
+        if (hours >= 168) { base = vehicle.price7d; label = "7 jours"; }
+        else if (hours >= 24) { base = vehicle.price24h; label = "24 heures"; }
+        else { base = vehicle.price4h; label = "4 heures"; }
+        const discounted = Math.round(base * (1 - tierInfo.rentalDiscount));
+        return { price: discounted, basePrice: base, label: label };
+    }
+
+    // Assurance
+    const insuranceMount = document.getElementById("insuranceOptions");
+    insuranceMount.innerHTML = INSURANCE_LEVELS.map(function (i, idx) {
+        const priceLabel = tierInfo.freeInsurance
+            ? (i.price > 0 ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px;">' + i.price.toLocaleString("fr-FR") + ' $</span>Offerte' : 'Inclus')
+            : (i.price > 0 ? i.price.toLocaleString("fr-FR") + ' $' : 'Inclus');
+        return (
+            '<label class="radio-card' + (idx === 0 ? ' selected' : '') + '" data-code="' + i.code + '">' +
+            '  <input type="radio" name="insurance" value="' + i.code + '"' + (idx === 0 ? ' checked' : '') + '>' +
+            '  <div><div class="rc-title">' + i.label + '</div><div class="rc-desc">' + i.desc + '</div></div>' +
+            '  <div class="rc-price">' + priceLabel + '</div>' +
+            '</label>'
+        );
+    }).join("");
+    if (tierInfo.freeInsurance) {
+        insuranceMount.insertAdjacentHTML("beforebegin", '<p style="font-size:11px; color:var(--apex-red); text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;">Assurance prise en charge par ton abonnement ' + tierInfo.label + '</p>');
+    }
+    insuranceMount.querySelectorAll(".radio-card").forEach(function (card) {
+        card.addEventListener("click", function () {
+            insuranceMount.querySelectorAll(".radio-card").forEach(function (c) { c.classList.remove("selected"); });
+            card.classList.add("selected");
+            card.querySelector("input").checked = true;
+            state.insurance = card.getAttribute("data-code");
+        });
+    });
+
+    // Livraison
+    const deliveryMount = document.getElementById("deliveryOptions");
+    deliveryMount.innerHTML = DELIVERY_ZONES.map(function (z, idx) {
+        const priceLabel = tierInfo.freeDelivery
+            ? (z.price > 0 ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px;">' + z.price.toLocaleString("fr-FR") + ' $</span>Gratuit' : 'Gratuit')
+            : (z.price > 0 ? z.price.toLocaleString("fr-FR") + ' $' : 'Gratuit');
+        return (
+            '<label class="radio-card' + (idx === 0 ? ' selected' : '') + '" data-code="' + z.code + '">' +
+            '  <input type="radio" name="delivery" value="' + z.code + '"' + (idx === 0 ? ' checked' : '') + '>' +
+            '  <div class="rc-title">' + z.label + '</div>' +
+            '  <div class="rc-price">' + priceLabel + '</div>' +
+            '</label>'
+        );
+    }).join("");
+    if (tierInfo.freeDelivery) {
+        deliveryMount.insertAdjacentHTML("beforebegin", '<p style="font-size:11px; color:var(--apex-red); text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px;">Livraison prise en charge par ton abonnement ' + tierInfo.label + '</p>');
+    }
+    deliveryMount.querySelectorAll(".radio-card").forEach(function (card) {
+        card.addEventListener("click", function () {
+            deliveryMount.querySelectorAll(".radio-card").forEach(function (c) { c.classList.remove("selected"); });
+            card.classList.add("selected");
+            card.querySelector("input").checked = true;
+            state.delivery = card.getAttribute("data-code");
+        });
+    });
+
+    function computeTotals() {
+        const vehicle = findVehicle(state.vehicleId);
+        const hours = getDurationHours();
+        const rental = pickRentalPrice(vehicle, hours);
+        const insuranceLevel = INSURANCE_LEVELS.find(function (i) { return i.code === state.insurance; });
+        const insurancePrice = tierInfo.freeInsurance ? 0 : insuranceLevel.price;
+        const insurance = Object.assign({}, insuranceLevel, { price: insurancePrice, originalPrice: insuranceLevel.price });
+        const deliveryZone = DELIVERY_ZONES.find(function (z) { return z.code === state.delivery; });
+        const deliveryPrice = tierInfo.freeDelivery ? 0 : deliveryZone.price;
+        const delivery = Object.assign({}, deliveryZone, { price: deliveryPrice, originalPrice: deliveryZone.price });
+        const total = rental.price + insurance.price + delivery.price;
+        return { vehicle: vehicle, hours: hours, rental: rental, insurance: insurance, delivery: delivery, total: total };
+    }
+
+    function renderSummary() {
+        const t = computeTotals();
+        const hasRentalDiscount = tierInfo.rentalDiscount > 0;
+        const hasFreeDelivery = tierInfo.freeDelivery && t.delivery.originalPrice > 0;
+        const hasFreeInsurance = tierInfo.freeInsurance && t.insurance.originalPrice > 0;
+
+        const rentalPriceHTML = (hasRentalDiscount
+            ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px; font-size:12px;">' + t.rental.basePrice.toLocaleString("fr-FR") + ' $</span>'
+            : '') + t.rental.price.toLocaleString("fr-FR") + ' $';
+
+        const insurancePriceHTML = hasFreeInsurance
+            ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px; font-size:12px;">' + t.insurance.originalPrice.toLocaleString("fr-FR") + ' $</span>Offerte'
+            : (t.insurance.price > 0 ? t.insurance.price.toLocaleString("fr-FR") + ' $' : 'Inclus');
+
+        const deliveryPriceHTML = hasFreeDelivery
+            ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px; font-size:12px;">' + t.delivery.originalPrice.toLocaleString("fr-FR") + ' $</span>Gratuit'
+            : (t.delivery.price > 0 ? t.delivery.price.toLocaleString("fr-FR") + ' $' : 'Gratuit');
+
+        document.getElementById("summaryCard").innerHTML =
+            (tierInfo.rentalDiscount > 0 || tierInfo.freeDelivery || tierInfo.freeInsurance
+                ? '<p class="mt-1" style="font-size:11px; color:var(--apex-red); text-transform:uppercase; letter-spacing:.04em;">Avantages ' + tierInfo.label + ' appliqués automatiquement</p>'
+                : '') +
+            '<div class="summary-row"><span>Véhicule</span><span>' + t.vehicle.name + '</span></div>' +
+            '<div class="summary-row"><span>Location (' + t.rental.label + ')' + (hasRentalDiscount ? ' <span class="text-red" style="font-size:11px;">-' + (tierInfo.rentalDiscount * 100) + '%</span>' : '') + '</span><span>' + rentalPriceHTML + '</span></div>' +
+            '<div class="summary-row"><span>Assurance (' + t.insurance.label + ')</span><span>' + insurancePriceHTML + '</span></div>' +
+            '<div class="summary-row"><span>Livraison (' + t.delivery.label + ')</span><span>' + deliveryPriceHTML + '</span></div>' +
+            '<div class="summary-row total"><span>TOTAL</span><span class="value">' + t.total.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<p class="text-silver mt-1" style="font-size:12px;">Caution (non incluse dans le total) : ' + t.vehicle.deposit.toLocaleString("fr-FR") + ' $</p>';
+    }
+
+    function goToStep(step) {
+        currentStep = step;
+        document.querySelectorAll(".step-panel").forEach(function (p) {
+            p.classList.toggle("active", parseInt(p.getAttribute("data-panel"), 10) === step);
+        });
+        document.querySelectorAll(".step").forEach(function (s) {
+            const n = parseInt(s.getAttribute("data-step"), 10);
+            s.classList.toggle("active", n === step);
+            s.classList.toggle("done", n < step);
+        });
+        document.getElementById("prevBtn").style.visibility = step === 1 ? "hidden" : "visible";
+        document.getElementById("nextBtn").textContent = step === totalSteps ? "Confirmer la réservation" : "Suivant";
+        if (step === 6) renderSummary();
+    }
+
+    document.getElementById("prevBtn").addEventListener("click", function () {
+        if (currentStep > 1) goToStep(currentStep - 1);
+    });
+
+    document.getElementById("nextBtn").addEventListener("click", async function (e) {
+        if (currentStep < totalSteps) {
+            goToStep(currentStep + 1);
+            return;
+        }
+
+        // ÉTAPE 7 : confirmation -> sauvegarde en base + génération du numéro
+        const t = computeTotals();
+        const nextBtn = e.target;
+        nextBtn.disabled = true;
+        nextBtn.textContent = "Confirmation...";
+
+        const reference = await createReservation({
+            userId: user.id,
+            vehicleId: t.vehicle.id,
+            vehicleName: t.vehicle.name,
+            startDate: document.getElementById("startDate").value,
+            startTime: document.getElementById("startTime").value,
+            endDate: document.getElementById("endDate").value,
+            endTime: document.getElementById("endTime").value,
+            insurance: t.insurance.code,
+            insurancePrice: t.insurance.price,
+            delivery: t.delivery.code,
+            deliveryPrice: t.delivery.price,
+            rentalPrice: t.rental.price,
+            rentalBasePrice: t.rental.basePrice,
+            appliedClubTier: user.clubTier !== "none" ? user.clubTier : "",
+            rentalDiscountPercent: tierInfo.rentalDiscount * 100,
+            deliverySavings: t.delivery.originalPrice > 0 ? t.delivery.originalPrice - t.delivery.price : 0,
+            insuranceSavings: t.insurance.originalPrice > 0 ? t.insurance.originalPrice - t.insurance.price : 0,
+            total: t.total,
+            deposit: t.vehicle.deposit
+        });
+
+        if (!reference) {
+            alert("Une erreur est survenue, réessaie.");
+            nextBtn.disabled = false;
+            nextBtn.textContent = "Confirmer la réservation";
+            return;
+        }
+
+        navigateWithFade("confirmation.html?ref=" + reference);
+    });
+
+    goToStep(1);
+});
+</script>
+
+</body>
+</html>

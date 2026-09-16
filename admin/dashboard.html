@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Tableau de bord — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main" id="adminContent"></div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+
+    if (user.role !== "admin" && user.role !== "employee") {
+        document.getElementById("adminContent").innerHTML =
+            '<p class="text-silver">Cette section est réservée aux membres du personnel.</p>' +
+            '<a href="../index.html" class="btn btn-outline mt-3">Retour à l\'accueil</a>';
+        return;
+    }
+
+    renderAdminSidebar("dashboard.html");
+
+    const [allVehicles, reservations, businessRequests, mediaRequests, incidents] = await Promise.all([
+        getAllVehicles(), getAllReservations(), getBusinessRequests(), getMediaRequests(), getIncidents()
+    ]);
+    const { data: clientProfiles } = await supabaseClient.from("profiles").select("id").eq("role", "client");
+
+    const available = allVehicles.filter(function (v) { return v.status === "available"; }).length;
+    const rented = allVehicles.filter(function (v) { return v.status === "rented"; }).length;
+    const maintenance = allVehicles.filter(function (v) { return v.status === "maintenance"; }).length;
+
+    const today = todayLocalKey();
+    const revenueToday = reservations
+        .filter(function (r) { return isoToLocalDateKey(r.createdAt) === today; })
+        .reduce(function (sum, r) { return sum + r.total; }, 0);
+
+    document.getElementById("adminContent").innerHTML =
+        '<h1 class="section-title">Back office — Bonjour ' + user.firstName + '</h1>' +
+
+        '<div class="grid grid-4 mt-3">' +
+        '  <div class="dashboard-card"><div class="stat-label">Véhicules</div><div class="stat-value">' + allVehicles.length + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Disponibles</div><div class="stat-value green">' + available + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">En location</div><div class="stat-value red">' + rented + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Maintenance</div><div class="stat-value orange">' + maintenance + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Réservations totales</div><div class="stat-value">' + reservations.length + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">CA du jour</div><div class="stat-value" style="font-size:22px;">' + revenueToday.toLocaleString("fr-FR") + ' $</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Clients enregistrés</div><div class="stat-value">' + ((clientProfiles && clientProfiles.length) || 0) + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Incidents ouverts</div><div class="stat-value orange">' + incidents.filter(function (i) { return i.status !== "CLOS"; }).length + '</div></div>' +
+        '</div>' +
+
+        '<div class="grid grid-2 mt-3">' +
+        '  <div class="dashboard-card"><div class="stat-label">Demandes Business en attente</div><div class="stat-value" style="font-size:22px;">' + businessRequests.filter(function (r) { return r.status === "new"; }).length + '</div></div>' +
+        '  <div class="dashboard-card"><div class="stat-label">Demandes Media en attente</div><div class="stat-value" style="font-size:22px;">' + mediaRequests.filter(function (r) { return r.status === "new"; }).length + '</div></div>' +
+        '</div>' +
+
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-top:32px;">' +
+        '  <h2 class="section-title" style="font-size:18px; margin:0;">Dernières réservations</h2>' +
+        '  <a href="reservations.html" class="btn btn-outline btn-sm">Gérer toutes les réservations</a>' +
+        '</div>' +
+        '<div class="table-wrap mt-2">' +
+        '  <table class="table">' +
+        '    <thead><tr><th>Référence</th><th>Véhicule</th><th>Départ</th><th>Total</th><th>Statut</th></tr></thead>' +
+        '    <tbody id="resTableBody"></tbody>' +
+        '  </table>' +
+        '</div>';
+
+    const tbody = document.getElementById("resTableBody");
+    const recent = reservations.slice(0, 10);
+    tbody.innerHTML = recent.length
+        ? recent.map(function (r) {
+            const meta = getReservationStatusMeta(r.status);
+            return '<tr><td>' + r.reference + '</td><td>' + r.vehicleName + '</td><td>' + r.startDate + '</td><td>' + r.total.toLocaleString("fr-FR") + ' $</td><td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td></tr>';
+        }).join("")
+        : '<tr><td colspan="5" class="text-silver">Aucune réservation enregistrée.</td></tr>';
+
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Services — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+<style>
+    .service-card { display:flex; gap:16px; align-items:flex-start; }
+    .service-icon { width:44px; height:44px; flex-shrink:0; border-radius:10px; background:rgba(var(--apex-red-rgb),0.12); border:1px solid rgba(var(--apex-red-rgb),0.3); display:flex; align-items:center; justify-content:center; font-size:20px; }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm">
+        <div class="container">
+            <h1 class="section-title">Nos services</h1>
+            <p class="section-subtitle">Tout ce qu'APEX RENTAL propose, de la location simple aux solutions professionnelles.</p>
+        </div>
+    </section>
+
+    <section class="section" style="padding-top:0;">
+        <div class="container grid grid-2" id="servicesGrid"></div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const services = [
+        { icon: "🚗", title: "Location", desc: "Location courte, moyenne et longue durée : citadines, berlines, SUV, sportives et véhicules de prestige.", link: "vehicules.html", cta: "Voir le catalogue" },
+        { icon: "🚚", title: "Livraison", desc: "Ton véhicule livré directement où tu te trouves : Los Santos, Vinewood, Sandy Shores ou Paleto Bay.", link: "tarifs.html", cta: "Voir les frais de livraison" },
+        { icon: "↩️", title: "Récupération", desc: "Un agent APEX récupère le véhicule en fin de location, avec inspection sur place.", link: "faq.html", cta: "Comment ça marche" },
+        { icon: "🏢", title: "Apex Business", desc: "Comptes entreprise, flottes actives, facturation mensuelle et tarifs préférentiels.", link: "business.html", cta: "Découvrir Business" },
+        { icon: "🎬", title: "Apex Media", desc: "Véhicules pour films, séries, clips, publicités et shootings photo, avec devis sur mesure.", link: "media.html", cta: "Demander un devis" },
+        { icon: "👑", title: "Apex Club & Black", desc: "Deux paliers d'abonnement premium : livraison offerte, réservation prioritaire, véhicules exclusifs.", link: "club.html", cta: "Découvrir Apex Club" }
+    ];
+
+    document.getElementById("servicesGrid").innerHTML = services.map(function (s) {
+        return (
+            '<div class="card reveal">' +
+            '  <div class="service-card">' +
+            '    <div class="service-icon">' + s.icon + '</div>' +
+            '    <div>' +
+            '      <h3 style="font-size:16px; color:var(--apex-white);">' + s.title + '</h3>' +
+            '      <p class="text-silver mt-1" style="font-size:13px;">' + s.desc + '</p>' +
+            '      <a href="' + s.link + '" class="btn btn-outline btn-sm mt-2">' + s.cta + '</a>' +
+            '    </div>' +
+            '  </div>' +
+            '</div>'
+        );
+    }).join("");
+
+    initScrollReveal();
+});
+</script>
+
+</body>
+</html>

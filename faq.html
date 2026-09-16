@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main class="section">
+    <div class="container" style="max-width:720px;">
+        <h1 class="section-title text-center">Questions fréquentes</h1>
+        <div class="mt-4" id="faqList"></div>
+    </div>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const faqItems = [
+        { q: "Comment louer un véhicule ?", a: "Va sur la page Véhicules, choisis ton véhicule, puis clique sur Réserver. Un compte APEX RENTAL est nécessaire pour finaliser la réservation." },
+        { q: "Quelle est la caution ?", a: "Elle varie selon la catégorie du véhicule, de 500 $ pour une citadine à plus de 100 000 $ pour un véhicule de prestige. Le montant exact est affiché sur chaque fiche véhicule." },
+        { q: "Puis-je prolonger ma location ?", a: "Oui, contacte le support depuis ton espace client avant la fin de ta location pour demander une prolongation, sous réserve de disponibilité du véhicule." },
+        { q: "Que se passe-t-il en cas d'accident ?", a: "Un rapport d'incident est ouvert par nos agents, les dégâts sont évalués, puis la caution est ajustée en conséquence avant clôture du dossier." },
+        { q: "Puis-je être livré ?", a: "Oui, via APEX DELIVERY. Les frais varient selon la zone : Los Santos, Vinewood, Sandy Shores ou Paleto Bay." },
+        { q: "Comment récupérer ma caution ?", a: "Elle est restituée automatiquement après l'inspection de retour du véhicule si aucun dégât n'est constaté. Retrouve son statut dans ton espace client." },
+        { q: "Puis-je louer plusieurs véhicules ?", a: "Oui, particulièrement via un compte APEX BUSINESS qui permet de gérer plusieurs réservations et véhicules simultanément." },
+        { q: "Comment fonctionne APEX Club ?", a: "APEX CLUB et APEX BLACK sont deux abonnements hebdomadaires donnant accès à la livraison gratuite, la réservation prioritaire et des véhicules exclusifs." }
+    ];
+
+    const list = document.getElementById("faqList");
+    list.innerHTML = faqItems.map(function (item, i) {
+        return (
+            '<div class="accordion-item' + (i === 0 ? ' open' : '') + '" data-index="' + i + '">' +
+            '  <button class="accordion-trigger">' +
+            '    <h3>' + item.q + '</h3>' +
+            '    <span class="accordion-icon">⌄</span>' +
+            '  </button>' +
+            '  <div class="accordion-panel"><p>' + item.a + '</p></div>' +
+            '</div>'
+        );
+    }).join("");
+
+    list.querySelectorAll(".accordion-trigger").forEach(function (trigger) {
+        trigger.addEventListener("click", function () {
+            const item = trigger.closest(".accordion-item");
+            const wasOpen = item.classList.contains("open");
+            list.querySelectorAll(".accordion-item").forEach(function (el) { el.classList.remove("open"); });
+            if (!wasOpen) item.classList.add("open");
+        });
+    });
+});
+</script>
+
+</body>
+</html>

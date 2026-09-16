@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Incidents — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Incidents</h1>
+        <p class="section-subtitle">Déclare un incident sur un véhicule et suis son traitement.</p>
+
+        <div class="card mt-3" style="max-width:640px;" id="createIncidentCard">
+            <h3 style="font-size:14px; color:var(--apex-white);">Déclarer un incident</h3>
+            <form id="incidentForm" class="mt-2">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="incVehicle">Véhicule</label>
+                        <select id="incVehicle"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="incDamage">Dégâts estimés ($)</label>
+                        <input type="number" id="incDamage" min="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="incReservation">Référence réservation (optionnel)</label>
+                    <input type="text" id="incReservation" placeholder="AR-2026-0001">
+                </div>
+                <div class="form-group">
+                    <label for="incDescription">Description</label>
+                    <textarea id="incDescription" rows="3" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Créer l'incident</button>
+            </form>
+        </div>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead><tr><th>Référence</th><th>Véhicule</th><th>Dégâts estimés</th><th>Description</th><th>Statut</th><th>Coût réparation</th></tr></thead>
+                <tbody id="incidentsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("incidents.html");
+    if (!userHasPermission(user, "incidents", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "incidents", "edit");
+    if (!canEdit) document.getElementById("createIncidentCard").style.display = "none";
+
+    const vehicleSelect = document.getElementById("incVehicle");
+    const allVehicles = await getAllVehicles();
+    allVehicles.forEach(function (v) {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = v.name;
+        vehicleSelect.appendChild(opt);
+    });
+
+    function renderTable() {
+        const incidents = getIncidents().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); });
+
+        document.getElementById("incidentsBody").innerHTML = incidents.length
+            ? incidents.map(function (i) {
+                const options = INCIDENT_STATUSES.map(function (s) {
+                    return '<option value="' + s + '"' + (s === i.status ? ' selected' : '') + '>' + s + '</option>';
+                }).join("");
+                return (
+                    '<tr>' +
+                    '<td>' + i.reference + '</td>' +
+                    '<td>' + i.vehicleName + '</td>' +
+                    '<td>' + Number(i.estimatedDamage).toLocaleString("fr-FR") + ' $</td>' +
+                    '<td style="max-width:220px;">' + i.description + '</td>' +
+                    '<td>' +
+                    '  <select data-ref="' + i.reference + '" class="incidentStatus" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + options + '</select>' +
+                    '</td>' +
+                    '<td style="white-space:nowrap;">' +
+                    (canEdit
+                        ? '  <input type="number" min="0" class="repairInput" data-ref="' + i.reference + '" value="' + (i.appliedCost || i.estimatedDamage || 0) + '" style="width:90px; background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' +
+                          '  <button class="btn btn-outline btn-sm applyRepair" data-ref="' + i.reference + '">' + (i.appliedCost ? "Mettre à jour" : "Appliquer") + '</button>'
+                        : (i.appliedCost ? i.appliedCost.toLocaleString("fr-FR") + ' $' : '—')) +
+                    (i.appliedCost ? '<div class="text-silver mt-1" style="font-size:11px;">✓ ' + i.appliedCost.toLocaleString("fr-FR") + ' $ facturés</div>' : '') +
+                    '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="6" class="text-silver">Aucun incident enregistré.</td></tr>';
+
+        document.querySelectorAll(".incidentStatus").forEach(function (select) {
+            select.addEventListener("change", function () {
+                updateIncidentStatus(select.getAttribute("data-ref"), select.value);
+                renderTable();
+            });
+        });
+        document.querySelectorAll(".applyRepair").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                const ref = btn.getAttribute("data-ref");
+                const input = document.querySelector('.repairInput[data-ref="' + ref + '"]');
+                const amount = parseInt(input.value, 10) || 0;
+                applyIncidentRepairCost(ref, amount);
+                renderTable();
+            });
+        });
+    }
+
+    document.getElementById("incidentForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        const vehicle = allVehicles.find(function (v) { return v.id === vehicleSelect.value; });
+        createIncident({
+            vehicleId: vehicle.id,
+            vehicleName: vehicle.name,
+            reservationRef: document.getElementById("incReservation").value,
+            estimatedDamage: parseInt(document.getElementById("incDamage").value, 10) || 0,
+            description: document.getElementById("incDescription").value
+        });
+        document.getElementById("incidentForm").reset();
+        renderTable();
+    });
+
+    renderTable();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mon abonnement — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+<style>
+    .perk-list li { display:flex; align-items:flex-start; gap:8px; font-size:13px; color:rgba(245,245,245,0.85); margin-bottom:8px; }
+    .perk-list li::before { content:"✓"; color:var(--apex-red); font-weight:bold; }
+    .week-block { margin-bottom:28px; }
+    .week-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .week-head h3 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--apex-silver); }
+    .week-total { font-family:var(--font-heading); font-size:16px; color:var(--apex-red); }
+    .expense-row { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:13px; }
+    .expense-row:last-child { border-bottom:none; }
+    .expense-main { display:flex; flex-direction:column; }
+    .expense-main .exp-vehicle { color:var(--apex-white); font-family:var(--font-heading); font-size:13px; }
+    .expense-main .exp-meta { color:rgba(184,188,194,0.6); font-size:11px; margin-top:2px; }
+    .expense-amount { font-family:var(--font-heading); color:var(--apex-white); }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="client-sidebar"></aside>
+    <div class="dashboard-main" id="pageContent"></div>
+</div>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderClientSidebar("abonnement.html");
+
+    const tierInfo = await getEffectiveClubTierInfo(user.clubTier);
+    const weeks = await getClientWeeklySpending(user.id);
+    const totalAllTime = weeks.reduce(function (sum, w) { return sum + w.total; }, 0);
+
+    const subscriptionBlock = user.clubTier && user.clubTier !== "none"
+        ? (
+            '<div class="card">' +
+            '  <span style="font-family:var(--font-heading); font-size:15px; color:' + (user.clubTier === "apex-black" ? "var(--apex-red)" : "var(--apex-silver)") + ';">' + tierInfo.label.toUpperCase() + '</span>' +
+            (tierInfo.pricePerWeek > 0
+                ? '  <p style="font-family:var(--font-display); font-size:28px; margin-top:6px;">' + tierInfo.pricePerWeek.toLocaleString("fr-FR") + ' $<span style="font-family:var(--font-body); font-size:12px; color:var(--apex-silver);"> / semaine</span></p>'
+                : '') +
+            '  <ul class="perk-list mt-3">' + tierInfo.perks.map(function (p) { return '<li>' + p + '</li>'; }).join("") + '</ul>' +
+            '</div>'
+        )
+        : (
+            '<div class="card text-center">' +
+            '  <p class="text-silver">Tu n\'as pas encore d\'abonnement APEX CLUB.</p>' +
+            '  <a href="../club.html" class="btn btn-primary btn-sm mt-3">Découvrir Apex Club</a>' +
+            '</div>'
+        );
+
+    const weeksHTML = weeks.length
+        ? weeks.map(function (w) {
+            return (
+                '<div class="week-block">' +
+                '  <div class="week-head">' +
+                '    <h3>' + w.label + '</h3>' +
+                '    <span class="week-total">' + w.total.toLocaleString("fr-FR") + ' $</span>' +
+                '  </div>' +
+                '  <div class="card" style="padding:0;">' +
+                w.items.map(function (r) {
+                    return (
+                        '<div class="expense-row">' +
+                        '  <div class="expense-main">' +
+                        '    <span class="exp-vehicle">' + r.vehicleName + '</span>' +
+                        '    <span class="exp-meta">' + r.reference + ' — ' + isoToLocalDateKey(r.createdAt) + '</span>' +
+                        '  </div>' +
+                        '  <span class="expense-amount">' + r.total.toLocaleString("fr-FR") + ' $</span>' +
+                        '</div>'
+                    );
+                }).join("") +
+                '  </div>' +
+                '</div>'
+            );
+        }).join("")
+        : '<p class="text-silver">Aucune dépense enregistrée pour le moment.</p>';
+
+    document.getElementById("pageContent").innerHTML =
+        '<h1 class="section-title">Mon abonnement</h1>' +
+        '<p class="section-subtitle">Ton abonnement APEX et le détail de tes dépenses, semaine par semaine.</p>' +
+
+        '<div class="mt-3">' + subscriptionBlock + '</div>' +
+
+        '<div class="dashboard-card mt-4">' +
+        '  <div class="stat-label">Total dépensé (toutes semaines confondues)</div>' +
+        '  <div class="stat-value" style="font-size:24px;">' + totalAllTime.toLocaleString("fr-FR") + ' $</div>' +
+        '</div>' +
+
+        '<h2 class="section-title mt-4" style="font-size:18px;">Suivi des dépenses par semaine</h2>' +
+        '<div class="mt-3">' + weeksHTML + '</div>';
+});
+</script>
+
+</body>
+</html>

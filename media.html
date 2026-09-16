@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Media — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm">
+        <div class="container">
+            <h1 class="section-title">Apex Media</h1>
+            <p class="section-subtitle">Véhicules pour films, séries, clips, publicités et shootings photo. Décris ton projet, nous revenons vers toi avec un devis.</p>
+        </div>
+    </section>
+
+    <section class="section" style="padding-top:0;">
+        <div class="container" style="max-width:680px;">
+
+            <div id="mediaSuccess" class="form-success hidden">Ta demande de devis a bien été enregistrée. L'équipe APEX MEDIA te recontactera.</div>
+
+            <form id="mediaForm">
+                <div class="form-group">
+                    <label for="projectName">Nom du projet</label>
+                    <input type="text" id="projectName" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="projectType">Type de projet</label>
+                        <select id="projectType" required>
+                            <option value="film">Film</option>
+                            <option value="serie">Série</option>
+                            <option value="clip">Clip</option>
+                            <option value="publicite">Publicité</option>
+                            <option value="shooting">Shooting photo</option>
+                            <option value="evenement">Événement</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="projectDate">Date souhaitée</label>
+                        <input type="date" id="projectDate" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="duration">Durée</label>
+                        <input type="text" id="duration" placeholder="ex : 2 jours">
+                    </div>
+                    <div class="form-group">
+                        <label for="vehicleCount">Nombre de véhicules</label>
+                        <input type="number" id="vehicleCount" min="1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="vehicleTypes">Type(s) de véhicules</label>
+                        <input type="text" id="vehicleTypes" placeholder="ex : Sport, Prestige">
+                    </div>
+                    <div class="form-group">
+                        <label for="location">Lieu</label>
+                        <input type="text" id="location">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="needsDelivery">Livraison souhaitée</label>
+                        <select id="needsDelivery">
+                            <option value="non">Non</option>
+                            <option value="oui">Oui</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="needsDriver">Chauffeur souhaité</label>
+                        <select id="needsDriver">
+                            <option value="non">Non</option>
+                            <option value="oui">Oui</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="budget">Budget estimé ($)</label>
+                    <input type="number" id="budget" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="description">Description du projet</label>
+                    <textarea id="description" rows="4"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Demander un devis</button>
+            </form>
+        </div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    document.getElementById("mediaForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        const result = await submitMediaRequest({
+            projectName: document.getElementById("projectName").value,
+            projectType: document.getElementById("projectType").value,
+            date: document.getElementById("projectDate").value,
+            duration: document.getElementById("duration").value,
+            vehicleCount: parseInt(document.getElementById("vehicleCount").value, 10) || null,
+            vehicleTypes: document.getElementById("vehicleTypes").value,
+            location: document.getElementById("location").value,
+            needsDelivery: document.getElementById("needsDelivery").value,
+            needsDriver: document.getElementById("needsDriver").value,
+            budget: parseFloat(document.getElementById("budget").value) || null,
+            description: document.getElementById("description").value
+        });
+
+        submitBtn.disabled = false;
+        if (!result.ok) {
+            alert("Une erreur est survenue, réessaie.");
+            return;
+        }
+
+        document.getElementById("mediaForm").classList.add("hidden");
+        document.getElementById("mediaSuccess").classList.remove("hidden");
+    });
+});
+</script>
+
+</body>
+</html>

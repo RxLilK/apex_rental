@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Abonnements — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Abonnements</h1>
+        <p class="section-subtitle">Attribue ou retire APEX CLUB / APEX BLACK / Entreprise sur un compte client. Pour modifier les prix et avantages de ces paliers, voir la page Prix.</p>
+
+        <div class="grid grid-2 mt-3">
+            <div class="dashboard-card"><div class="stat-label">Abonnés Apex Club</div><div class="stat-value" id="clubCount">0</div></div>
+            <div class="dashboard-card"><div class="stat-label">Abonnés Apex Black</div><div class="stat-value red" id="blackCount">0</div></div>
+        </div>
+
+        <h2 class="section-title mt-4" style="font-size:18px;">Clients</h2>
+        <div class="table-wrap mt-2">
+            <table class="table">
+                <thead><tr><th>Client</th><th>E-mail</th><th>Abonnement actuel</th><th>Action</th></tr></thead>
+                <tbody id="subsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("abonnements.html");
+    if (!userHasPermission(user, "abonnements", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "abonnements", "edit");
+
+    async function renderTable() {
+        const { data: clientRows, error } = await supabaseClient.from("profiles").select("*").eq("role", "client");
+        if (error) console.error("abonnements:", error);
+        const clients = clientRows || [];
+        document.getElementById("clubCount").textContent = clients.filter(function (c) { return c.club_tier === "apex-club"; }).length;
+        document.getElementById("blackCount").textContent = clients.filter(function (c) { return c.club_tier === "apex-black"; }).length;
+
+        document.getElementById("subsBody").innerHTML = clients.length
+            ? clients.map(function (c) {
+                const label = c.club_tier === "apex-club" ? "APEX CLUB" : (c.club_tier === "apex-black" ? "APEX BLACK" : (c.club_tier === "entreprise" ? "ENTREPRISE" : "Standard"));
+                return (
+                    '<tr>' +
+                    '<td>' + c.first_name + ' ' + c.last_name + '</td>' +
+                    '<td>' + (c.email || '—') + '</td>' +
+                    '<td><span class="badge ' + (c.club_tier !== "none" ? "badge-available" : "badge-unavailable") + '">' + label + '</span></td>' +
+                    '<td>' +
+                    '  <select data-id="' + c.id + '" class="tierSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' +
+                    '    <option value="none"' + (c.club_tier === "none" ? ' selected' : '') + '>Standard</option>' +
+                    '    <option value="apex-club"' + (c.club_tier === "apex-club" ? ' selected' : '') + '>Apex Club</option>' +
+                    '    <option value="apex-black"' + (c.club_tier === "apex-black" ? ' selected' : '') + '>Apex Black</option>' +
+                    '    <option value="entreprise"' + (c.club_tier === "entreprise" ? ' selected' : '') + '>Entreprise</option>' +
+                    '  </select>' +
+                    '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="4" class="text-silver">Aucun client enregistré.</td></tr>';
+
+        document.querySelectorAll(".tierSelect").forEach(function (select) {
+            select.addEventListener("change", async function () {
+                select.disabled = true;
+                await setUserClubTier(select.getAttribute("data-id"), select.value);
+                renderTable();
+            });
+        });
+    }
+
+    renderTable();
+});
+</script>
+
+</body>
+</html>

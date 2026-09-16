@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Clients — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Clients</h1>
+        <p class="section-subtitle">Tous les comptes clients enregistrés — statut et grade modifiables directement.</p>
+
+        <div class="card mt-3" style="max-width:420px;" id="gradeManagementCard">
+            <h3 style="font-size:13px; color:var(--apex-white);">Grades clients (pour options futures)</h3>
+            <form id="gradeForm" class="mt-2" style="display:flex; gap:8px;">
+                <input type="text" id="newGradeName" placeholder="Nom du grade (ex : Ambassadeur)" style="flex:1; background:var(--apex-carbon); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:9px 12px; color:var(--apex-white);">
+                <button type="submit" class="btn btn-outline btn-sm">Ajouter</button>
+            </form>
+            <div class="mt-2" id="gradesList" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+        </div>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead>
+                    <tr><th>Nom</th><th>Entreprise</th><th>Téléphone</th><th>E-mail</th><th>Locations</th><th>Dépenses</th><th>Statut</th><th>Grade client</th></tr>
+                </thead>
+                <tbody id="clientsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("clients.html");
+    if (!userHasPermission(user, "clients", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "clients", "edit");
+    if (!canEdit) document.getElementById("gradeManagementCard").style.display = "none";
+
+    const reservations = await getAllReservations();
+    let grades = await getClientGrades();
+
+    async function renderGrades() {
+        document.getElementById("gradesList").innerHTML = grades.length
+            ? grades.map(function (g) {
+                return '<span class="badge badge-available" style="display:inline-flex; align-items:center; gap:6px;">' +
+                    g +
+                    '<button type="button" class="deleteGrade" data-grade="' + g + '" style="color:inherit; font-size:13px; line-height:1; padding:0;" title="Supprimer ce grade">&times;</button>' +
+                    '</span>';
+            }).join("")
+            : '<span class="text-silver" style="font-size:12px;">Aucun grade créé pour le moment.</span>';
+
+        document.querySelectorAll(".deleteGrade").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                const grade = btn.getAttribute("data-grade");
+                if (confirm('Supprimer le grade "' + grade + '" ? Il sera retiré des clients qui l\'ont.')) {
+                    await deleteClientGrade(grade);
+                    grades = await getClientGrades();
+                    renderGrades();
+                    renderTable();
+                }
+            });
+        });
+    }
+
+    document.getElementById("gradeForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const input = document.getElementById("newGradeName");
+        if (input.value.trim()) {
+            await addClientGrade(input.value.trim());
+            input.value = "";
+            grades = await getClientGrades();
+            renderGrades();
+            renderTable();
+        }
+    });
+
+    function statusOptions(current) {
+        const options = [
+            { value: "none", label: "Standard" },
+            { value: "apex-club", label: "Apex Club" },
+            { value: "apex-black", label: "Apex Black" },
+            { value: "entreprise", label: "Entreprise" }
+        ];
+        return options.map(function (o) {
+            return '<option value="' + o.value + '"' + (o.value === current ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join("");
+    }
+
+    function gradeOptions(current) {
+        let html = '<option value=""' + (!current ? ' selected' : '') + '>Aucun</option>';
+        html += grades.map(function (g) {
+            return '<option value="' + g + '"' + (g === current ? ' selected' : '') + '>' + g + '</option>';
+        }).join("");
+        return html;
+    }
+
+    async function renderTable() {
+        const { data: clientRows, error } = await supabaseClient.from("profiles").select("*").eq("role", "client");
+        if (error) console.error("clients:", error);
+        const clients = clientRows || [];
+
+        document.getElementById("clientsBody").innerHTML = clients.length
+            ? clients.map(function (c) {
+                const clientReservations = reservations.filter(function (r) { return r.userId === c.id; });
+                const totalSpent = clientReservations.reduce(function (sum, r) { return sum + r.total; }, 0);
+
+                return (
+                    '<tr>' +
+                    '<td>' + c.first_name + ' ' + c.last_name + '</td>' +
+                    '<td>' + (c.business_name || '—') + '</td>' +
+                    '<td>' + (c.phone || '—') + '</td>' +
+                    '<td>' + (c.email || '—') + '</td>' +
+                    '<td>' + clientReservations.length + '</td>' +
+                    '<td>' + totalSpent.toLocaleString("fr-FR") + ' $</td>' +
+                    '<td><select data-id="' + c.id + '" class="statusSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + statusOptions(c.club_tier) + '</select></td>' +
+                    '<td><select data-id="' + c.id + '" class="gradeSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + gradeOptions(c.client_grade) + '</select></td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="8" class="text-silver">Aucun client enregistré.</td></tr>';
+
+        document.querySelectorAll(".statusSelect").forEach(function (select) {
+            select.addEventListener("change", function () {
+                setUserClubTier(select.getAttribute("data-id"), select.value);
+            });
+        });
+        document.querySelectorAll(".gradeSelect").forEach(function (select) {
+            select.addEventListener("change", function () {
+                setUserClientGrade(select.getAttribute("data-id"), select.value);
+            });
+        });
+    }
+
+    renderGrades();
+    renderTable();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Statistiques — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+<style>
+    .bar-chart { display:flex; align-items:flex-end; gap:10px; height:180px; padding-top:20px; }
+    .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+    .bar-fill { width:100%; max-width:36px; background:linear-gradient(180deg, var(--apex-red), var(--apex-red-dark)); border-radius:4px 4px 0 0; transition: height .6s ease; }
+    .bar-value { font-size:11px; color:var(--apex-silver); margin-bottom:4px; }
+    .bar-label { font-size:10px; color:rgba(184,188,194,0.6); margin-top:8px; text-transform:uppercase; text-align:center; }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Statistiques</h1>
+        <p class="section-subtitle">Vue d'ensemble de la flotte et de l'activité.</p>
+
+        <div class="grid grid-2 mt-3">
+            <div class="card">
+                <h3 style="font-size:14px; color:var(--apex-white);">Véhicules par catégorie</h3>
+                <div class="bar-chart mt-2" id="chartCategories"></div>
+            </div>
+            <div class="card">
+                <h3 style="font-size:14px; color:var(--apex-white);">Statut de la flotte</h3>
+                <div class="bar-chart mt-2" id="chartStatus"></div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <h3 style="font-size:14px; color:var(--apex-white);">Taux d'utilisation de la flotte</h3>
+            <div class="mt-2" style="background:rgba(255,255,255,0.06); border-radius:20px; overflow:hidden; height:22px;">
+                <div id="utilizationBar" style="height:100%; background:var(--apex-red); width:0%; transition:width .6s ease; display:flex; align-items:center; justify-content:flex-end; padding-right:8px; font-size:10px; color:white;"></div>
+            </div>
+        </div>
+
+        <div class="grid grid-3 mt-3">
+            <div class="dashboard-card"><div class="stat-label">Véhicule le plus réservé</div><div class="stat-value" id="topVehicle" style="font-size:18px;">—</div></div>
+            <div class="dashboard-card"><div class="stat-label">Catégorie la plus populaire</div><div class="stat-value" id="topCategory" style="font-size:18px;">—</div></div>
+            <div class="dashboard-card"><div class="stat-label">Panier moyen</div><div class="stat-value" id="avgBasket" style="font-size:20px;">0 $</div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("statistiques.html");
+    if (!userHasPermission(user, "statistiques", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "statistiques", "edit");
+
+    const allVehicles = await getAllVehicles();
+    const reservations = await getAllReservations();
+
+    // Véhicules par catégorie
+    const catCounts = CATEGORIES.map(function (c) {
+        return { label: c.label.replace("Apex ", ""), value: allVehicles.filter(function (v) { return v.category === c.code; }).length };
+    });
+    renderBarChart("chartCategories", catCounts);
+
+    // Statuts de la flotte
+    const statusCounts = VEHICLE_STATUSES.map(function (s) {
+        return { label: s.label, value: allVehicles.filter(function (v) { return v.status === s.code; }).length };
+    }).filter(function (s) { return s.value > 0; });
+    renderBarChart("chartStatus", statusCounts.length ? statusCounts : [{ label: "Disponible", value: allVehicles.length }]);
+
+    // Taux d'utilisation
+    const inUse = allVehicles.filter(function (v) { return ["rented", "reserved", "maintenance"].indexOf(v.status) !== -1; }).length;
+    const rate = allVehicles.length ? Math.round((inUse / allVehicles.length) * 100) : 0;
+    const bar = document.getElementById("utilizationBar");
+    setTimeout(function () { bar.style.width = rate + "%"; bar.textContent = rate + "%"; }, 100);
+
+    // Réservations
+    if (reservations.length) {
+        const counts = {};
+        reservations.forEach(function (r) { counts[r.vehicleName] = (counts[r.vehicleName] || 0) + 1; });
+        const top = Object.entries(counts).sort(function (a, b) { return b[1] - a[1]; })[0];
+        document.getElementById("topVehicle").textContent = top ? top[0] : "—";
+
+        const catCountsRes = {};
+        reservations.forEach(function (r) {
+            const v = allVehicles.find(function (x) { return x.id === r.vehicleId; });
+            if (v) catCountsRes[v.category] = (catCountsRes[v.category] || 0) + 1;
+        });
+        const topCat = Object.entries(catCountsRes).sort(function (a, b) { return b[1] - a[1]; })[0];
+        document.getElementById("topCategory").textContent = topCat ? getCategoryLabel(topCat[0]) : "—";
+
+        const avg = reservations.reduce(function (sum, r) { return sum + r.total; }, 0) / reservations.length;
+        document.getElementById("avgBasket").textContent = Math.round(avg).toLocaleString("fr-FR") + " $";
+    }
+
+    function renderBarChart(mountId, data) {
+        const max = Math.max.apply(null, data.map(function (d) { return d.value; })) || 1;
+        const mount = document.getElementById(mountId);
+        mount.innerHTML = data.map(function (d) {
+            const heightPct = Math.round((d.value / max) * 100);
+            return (
+                '<div class="bar-col">' +
+                '  <span class="bar-value">' + d.value + '</span>' +
+                '  <div class="bar-fill" style="height:0%;" data-target="' + heightPct + '"></div>' +
+                '  <span class="bar-label">' + d.label + '</span>' +
+                '</div>'
+            );
+        }).join("");
+
+        setTimeout(function () {
+            mount.querySelectorAll(".bar-fill").forEach(function (bar) {
+                bar.style.height = bar.getAttribute("data-target") + "%";
+            });
+        }, 100);
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Calendrier — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Calendrier</h1>
+        <p class="section-subtitle">Disponibilité et réservations semaine par semaine, colorées selon l'abonnement du client.</p>
+
+        <div class="calendar-legend mt-3">
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:rgba(62,207,142,0.2); border:1px solid var(--apex-green);"></span> Disponible</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:rgba(184,188,194,0.15);"></span> Indisponible</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#1F7A4D;"></span> Réservé — Standard</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#1D4ED8;"></span> Réservé — Entreprise</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#0B0B0D; border:2px solid #C8102E;"></span> Réservé — Apex Club</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#0B0B0D; border:2px solid #D4AF37;"></span> Réservé — Apex Black</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#E8A33D;"></span> Location en cours</span>
+            <span class="calendar-legend-item"><span class="calendar-legend-dot" style="background:#DC2626;"></span> Location terminée</span>
+        </div>
+
+        <div class="mt-3" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div class="grade-tabs" style="display:flex; gap:8px;">
+                <button type="button" class="btn btn-outline btn-sm" id="viewVehicleBtn">Par véhicule</button>
+                <button type="button" class="btn btn-outline btn-sm" id="viewClientBtn">Par client</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button type="button" class="btn btn-outline btn-sm" id="prevWeekBtn">← Semaine préc.</button>
+                <span class="text-silver" id="weekLabel" style="font-size:12px; white-space:nowrap;"></span>
+                <button type="button" class="btn btn-outline btn-sm" id="nextWeekBtn">Semaine suiv. →</button>
+            </div>
+        </div>
+
+        <div class="form-group mt-3" style="max-width:280px;">
+            <label for="calSearch">Rechercher</label>
+            <input type="text" id="calSearch" placeholder="Véhicule ou client...">
+        </div>
+
+        <div class="calendar-wrap mt-3">
+            <table class="calendar-table">
+                <thead><tr id="calendarHead"></tr></thead>
+                <tbody id="calendarBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("calendrier.html");
+    if (!userHasPermission(user, "reservations", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+
+    let currentMonday = getWeekMonday(new Date());
+    let view = "vehicle";
+    const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+    const allVehicles = await getAllVehicles();
+    const { data: profileRows } = await supabaseClient.from("profiles").select("*");
+    const profiles = profileRows || [];
+    const clients = profiles.filter(function (p) { return p.role === "client"; });
+
+    function updateViewButtons() {
+        document.getElementById("viewVehicleBtn").className = "btn btn-sm " + (view === "vehicle" ? "btn-primary" : "btn-outline");
+        document.getElementById("viewClientBtn").className = "btn btn-sm " + (view === "client" ? "btn-primary" : "btn-outline");
+    }
+
+    function renderHead(weekDates) {
+        document.getElementById("weekLabel").textContent = formatWeekLabel(toDateKey(currentMonday));
+        document.getElementById("calendarHead").innerHTML =
+            '<th>' + (view === "vehicle" ? "Véhicule" : "Client") + '</th>' +
+            weekDates.map(function (d, i) {
+                return '<th>' + DAY_NAMES[i] + ' ' + d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + '</th>';
+            }).join("");
+    }
+
+    function renderVehicleView(weekDates, query, weekReservations) {
+        const list = allVehicles.filter(function (v) { return v.name.toLowerCase().indexOf(query) !== -1; });
+
+        document.getElementById("calendarBody").innerHTML = list.map(function (v) {
+            const globallyUnavailable = v.status === "maintenance" || v.status === "unavailable";
+            const vehicleBookings = weekReservations.filter(function (r) { return r.vehicleId === v.id; });
+
+            const cells = weekDates.map(function (d) {
+                const dateKey = toDateKey(d);
+                if (globallyUnavailable) {
+                    return '<td><div class="calendar-cell cal-unavailable">Indisponible</div></td>';
+                }
+                const booking = vehicleBookings.find(function (r) { return reservationCoversDate(r, dateKey); });
+                if (booking) {
+                    if (booking.status === "active") {
+                        return '<td><div class="calendar-cell" style="background:#E8A33D; color:#0B0B0D;">Location<br>en cours</div></td>';
+                    }
+                    if (booking.status === "completed") {
+                        return '<td><div class="calendar-cell" style="background:#DC2626; color:#F5F5F5;">Location<br>terminée</div></td>';
+                    }
+                    const client = profiles.find(function (p) { return p.id === booking.userId; });
+                    const tier = client ? client.club_tier : "none";
+                    const style = getTierCalendarStyle(tier);
+                    return '<td><div class="calendar-cell" style="background:' + style.bg + '; color:' + style.color + ';' + (style.border ? ' border:' + style.border + ';' : '') + '">Réservé<br>' + style.label + '</div></td>';
+                }
+                return '<td><div class="calendar-cell cal-available">Disponible</div></td>';
+            }).join("");
+
+            return '<tr><td class="calendar-row-label">' + v.name + '</td>' + cells + '</tr>';
+        }).join("") || '<tr><td colspan="8" class="text-silver" style="padding:16px;">Aucun véhicule trouvé.</td></tr>';
+    }
+
+    function renderClientView(weekDates, query, weekReservations) {
+        const list = clients.filter(function (c) {
+            return ((c.first_name || "") + " " + (c.last_name || "")).toLowerCase().indexOf(query) !== -1 ||
+                (c.business_name || "").toLowerCase().indexOf(query) !== -1;
+        });
+
+        document.getElementById("calendarBody").innerHTML = list.map(function (c) {
+            const style = getTierCalendarStyle(c.club_tier);
+            const displayName = c.business_name ? c.business_name : ((c.first_name || "") + " " + (c.last_name || ""));
+            const clientBookings = weekReservations.filter(function (r) { return r.userId === c.id; });
+
+            const cells = weekDates.map(function (d) {
+                const dateKey = toDateKey(d);
+                const booking = clientBookings.find(function (r) { return reservationCoversDate(r, dateKey); });
+                if (booking) {
+                    return '<td><div class="calendar-cell" style="background:' + style.bg + '; color:' + style.color + ';' + (style.border ? ' border:' + style.border + ';' : '') + '">' + booking.vehicleName + '</div></td>';
+                }
+                return '<td><div class="calendar-cell cal-empty">—</div></td>';
+            }).join("");
+
+            return '<tr><td class="calendar-row-label">' + displayName + '</td>' + cells + '</tr>';
+        }).join("") || '<tr><td colspan="8" class="text-silver" style="padding:16px;">Aucun client trouvé.</td></tr>';
+    }
+
+    async function render() {
+        const weekDates = getWeekDates(currentMonday);
+        const query = document.getElementById("calSearch").value.trim().toLowerCase();
+        renderHead(weekDates);
+
+        const weekReservations = await getReservationsOverlappingRange({}, toDateKey(weekDates[0]), toDateKey(weekDates[6]));
+
+        if (view === "vehicle") {
+            renderVehicleView(weekDates, query, weekReservations);
+        } else {
+            renderClientView(weekDates, query, weekReservations);
+        }
+        updateViewButtons();
+    }
+
+    document.getElementById("viewVehicleBtn").addEventListener("click", function () { view = "vehicle"; render(); });
+    document.getElementById("viewClientBtn").addEventListener("click", function () { view = "client"; render(); });
+    document.getElementById("prevWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() - 7);
+        render();
+    });
+    document.getElementById("nextWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() + 7);
+        render();
+    });
+    document.getElementById("calSearch").addEventListener("input", render);
+
+    render();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiche véhicule — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="js/script.js" defer></script>
+<style>
+    .spec-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .spec-box { background: rgba(36,38,42,0.6); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:14px; text-align:center; }
+    .spec-box .spec-label { font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:rgba(184,188,194,.6); margin-top:4px; }
+    .spec-box .spec-value { font-family:var(--font-heading); font-size:15px; color:var(--apex-white); }
+    .price-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; text-align:center; }
+    .price-grid .amount { font-family:var(--font-heading); font-size:20px; color:var(--apex-white); }
+    .price-grid .amount.highlight { color: var(--apex-red); }
+    @media (max-width:768px){ .spec-grid{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<main>
+    <section class="section-sm">
+        <div class="container" id="vehicleContainer">
+            <p class="text-silver">Chargement du véhicule...</p>
+        </div>
+    </section>
+</main>
+
+<div id="site-footer"></div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("id");
+    const vehicle = await getVehicleById(id);
+    const container = document.getElementById("vehicleContainer");
+
+    if (!vehicle) {
+        container.innerHTML =
+            '<p class="text-silver">Véhicule introuvable.</p>' +
+            '<a href="vehicules.html" class="btn btn-outline mt-3">Retour au catalogue</a>';
+        return;
+    }
+
+    document.title = vehicle.name + " — APEX RENTAL";
+
+    const deliveryOptions = DELIVERY_ZONES.map(function (z) {
+        return '<li>' + z.label + (z.price > 0 ? ' — ' + z.price.toLocaleString("fr-FR") + ' $' : ' — gratuit') + '</li>';
+    }).join("");
+
+    const insuranceOptions = INSURANCE_LEVELS.map(function (i) {
+        return '<li>' + i.label + ' — ' + (i.price > 0 ? i.price.toLocaleString("fr-FR") + ' $' : 'inclus') + ' : ' + i.desc + '</li>';
+    }).join("");
+
+    container.innerHTML =
+        '<a href="vehicules.html" class="text-silver" style="font-size:12px; text-transform:uppercase; letter-spacing:.06em;">← Retour au catalogue</a>' +
+        '<div class="grid grid-2 mt-3" style="align-items:start;">' +
+        '  <div class="card" style="padding:' + (vehicle.image ? '0' : '32px') + '; overflow:hidden;">' +
+        (vehicle.image ? '<img src="' + vehicle.image + '" alt="' + vehicle.name + '" style="width:100%; height:100%; object-fit:cover; display:block;">' : vehicleSilhouetteSVG()) +
+        '</div>' +
+        '  <div>' +
+        '    <span class="vehicle-cat">' + getCategoryLabel(vehicle.category) + '</span>' +
+        '    <h1 class="section-title" style="font-size:36px; margin-top:4px;">' + vehicle.name + '</h1>' +
+        (vehicle.available
+            ? '<span class="badge badge-available mt-1">Disponible</span>'
+            : '<span class="badge badge-rented mt-1">Indisponible actuellement</span>') +
+
+        '    <div class="spec-grid mt-3">' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.power + ' hp</div><div class="spec-label">Puissance</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.topSpeed + ' km/h</div><div class="spec-label">Vitesse max</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.accel + '</div><div class="spec-label">0-100 km/h</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.braking + '</div><div class="spec-label">Freinage</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.transmission + '</div><div class="spec-label">Transmission</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.fuel + '</div><div class="spec-label">Carburant</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.seats + '</div><div class="spec-label">Places</div></div>' +
+        '      <div class="spec-box"><div class="spec-value">' + vehicle.trunk + ' L</div><div class="spec-label">Coffre</div></div>' +
+        '    </div>' +
+
+        '    <div class="card mt-3">' +
+        '      <h3 style="font-size:13px; color:var(--apex-silver);">Tarifs</h3>' +
+        '      <div class="price-grid mt-2">' +
+        '        <div><div class="amount">' + vehicle.price4h.toLocaleString("fr-FR") + ' $</div><div class="spec-label">4 heures</div></div>' +
+        '        <div><div class="amount highlight">' + vehicle.price24h.toLocaleString("fr-FR") + ' $</div><div class="spec-label">24 heures</div></div>' +
+        '        <div><div class="amount">' + vehicle.price7d.toLocaleString("fr-FR") + ' $</div><div class="spec-label">7 jours</div></div>' +
+        '      </div>' +
+        '      <p class="text-silver mt-2" style="font-size:12px;">Caution : ' + vehicle.deposit.toLocaleString("fr-FR") + ' $</p>' +
+        '    </div>' +
+
+        '    <div class="card mt-2">' +
+        '      <h3 style="font-size:13px; color:var(--apex-silver);">Assurance</h3>' +
+        '      <ul class="mt-1" style="font-size:12px; color:rgba(245,245,245,0.8); line-height:1.9;">' + insuranceOptions + '</ul>' +
+        '    </div>' +
+
+        '    <div class="card mt-2">' +
+        '      <h3 style="font-size:13px; color:var(--apex-silver);">Livraison</h3>' +
+        '      <ul class="mt-1" style="font-size:12px; color:rgba(245,245,245,0.8); line-height:1.9;">' + deliveryOptions + '</ul>' +
+        '    </div>' +
+
+        '    <a href="reservation.html?id=' + vehicle.id + '" class="btn btn-primary btn-block mt-3">Réserver ce véhicule</a>' +
+        '  </div>' +
+        '</div>' +
+
+        '<div class="card mt-4">' +
+        '  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">' +
+        '    <h3 style="font-size:14px; color:var(--apex-white);">Disponibilité</h3>' +
+        '    <div style="display:flex; align-items:center; gap:10px;">' +
+        '      <button type="button" class="btn btn-outline btn-sm" id="prevWeekBtn">← Préc.</button>' +
+        '      <span class="text-silver" id="weekLabel" style="font-size:12px; white-space:nowrap;"></span>' +
+        '      <button type="button" class="btn btn-outline btn-sm" id="nextWeekBtn">Suiv. →</button>' +
+        '    </div>' +
+        '  </div>' +
+        '  <div class="grid" style="grid-template-columns:repeat(7,1fr); gap:8px; margin-top:16px;" id="availabilityGrid"></div>' +
+        '</div>';
+
+    // ---- Calendrier de disponibilité (vue client : disponible/indisponible) ----
+    let currentMonday = getWeekMonday(new Date());
+    const DAY_NAMES = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+    async function renderAvailability() {
+        const weekDates = getWeekDates(currentMonday);
+        document.getElementById("weekLabel").textContent = formatWeekLabel(toDateKey(currentMonday));
+
+        const globallyUnavailable = vehicle.status === "maintenance" || vehicle.status === "unavailable";
+        const weekReservations = globallyUnavailable
+            ? []
+            : await getReservationsOverlappingRange({ vehicleId: vehicle.id }, toDateKey(weekDates[0]), toDateKey(weekDates[6]));
+
+        document.getElementById("availabilityGrid").innerHTML = weekDates.map(function (d, i) {
+            const dateKey = toDateKey(d);
+            const isBooked = globallyUnavailable || weekReservations.some(function (r) { return reservationCoversDate(r, dateKey); });
+            return (
+                '<div class="calendar-cell ' + (isBooked ? "cal-unavailable" : "cal-available") + '" style="flex-direction:column; min-height:64px;">' +
+                '  <span style="font-size:10px; opacity:0.8;">' + DAY_NAMES[i] + ' ' + d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) + '</span>' +
+                '  <span style="margin-top:4px;">' + (isBooked ? "Indisponible" : "Disponible") + '</span>' +
+                '</div>'
+            );
+        }).join("");
+    }
+
+    document.getElementById("prevWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() - 7);
+        renderAvailability();
+    });
+    document.getElementById("nextWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() + 7);
+        renderAvailability();
+    });
+
+    renderAvailability();
+});
+</script>
+
+</body>
+</html>

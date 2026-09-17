@@ -337,7 +337,7 @@ create policy "staff modifie les vehicules" on public.vehicles for all
 create policy "voir ses reservations ou staff" on public.reservations for select
   using (user_id = auth.uid() or public.is_staff());
 create policy "creer sa reservation" on public.reservations for insert
-  with check (user_id = auth.uid());
+  with check (user_id = auth.uid() or public.is_staff());
 create policy "staff modifie reservations" on public.reservations for update
   using (public.is_staff());
 create policy "admin ou directeur supprime reservations" on public.reservations for delete

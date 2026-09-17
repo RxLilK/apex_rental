@@ -52,7 +52,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", async function () {
     const user = await requireAuth();
-    if (!user || user.role !== "admin") { window.location.href = "dashboard.html"; return; }
+    if (!user || !isDirectorOrAdmin(user)) { window.location.href = "dashboard.html"; return; }
     renderAdminSidebar("permissions.html");
 
     let currentGrade = EMPLOYEE_GRADES[0].code;

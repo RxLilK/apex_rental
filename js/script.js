@@ -346,6 +346,9 @@ function userHasPermission(user, capabilityKey, mode) {
     if (!user) return false;
     if (user.role === "admin") return true;
     if (user.role !== "employee") return false;
+    // Le Directeur (grade 10) a exactement les mêmes accès qu'un admin,
+    // quelle que soit la configuration des permissions par grade.
+    if (getGradeMeta(user.gradeCode).level === 10) return true;
     const perms = getGradePermissions(user.gradeCode);
     return !!(perms[capabilityKey] && perms[capabilityKey][mode]);
 }
@@ -725,7 +728,7 @@ const ADMIN_NAV_LINKS = [
 
 function canSeeAdminLink(user, link) {
     if (link.capability === null) return true;
-    if (link.capability === "admin-only") return user && user.role === "admin";
+    if (link.capability === "admin-only") return user && isDirectorOrAdmin(user);
     return userHasPermission(user, link.capability, link.requireEdit ? "edit" : "view");
 }
 

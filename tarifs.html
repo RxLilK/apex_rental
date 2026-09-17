@@ -30,11 +30,12 @@
 <div id="site-footer"></div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
     const grid = document.getElementById("pricingGrid");
+    const allCategories = await getAllCategories();
 
-    grid.innerHTML = CATEGORIES.filter(function (c) { return c.code !== "EVENT"; }).map(function (c) {
-        const p = getEffectivePricing(c.code);
+    grid.innerHTML = allCategories.filter(function (c) { return c.code !== "EVENT"; }).map(function (c) {
+        const p = c;
         return (
             '<div class="card reveal">' +
             '  <h3 style="font-size:16px; color:var(--apex-white);">' + c.label + '</h3>' +

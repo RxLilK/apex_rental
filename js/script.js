@@ -9,25 +9,60 @@
    1. DONNÉES CENTRALISÉES
    ============================================================ */
 
-const CATEGORIES = [
-    { code: "CITY", label: "Apex City" },
-    { code: "BUSINESS", label: "Apex Business" },
-    { code: "FAMILY", label: "Apex Family" },
-    { code: "SPORT", label: "Apex Sport" },
-    { code: "PRESTIGE", label: "Apex Prestige" },
-    { code: "EVENT", label: "Apex Event" },
-    { code: "UTILITY", label: "Apex Utility" }
-];
+/* Les catégories de véhicules vivent dans la table Supabase
+   "vehicle_categories" (code, label, tarifs) — le Directeur (grade 10)
+   ou l'admin peuvent en ajouter de nouvelles depuis admin/flotte.html.
+   On les met en cache après le premier chargement de chaque page. */
+let _categoriesCache = null;
 
-const PRICING = {
-    CITY:     { price4h: 500,   price24h: 1200,  price7d: 5500,  depositMin: 500,   depositMax: 1000 },
-    BUSINESS: { price4h: 1000,  price24h: 2500,  price7d: 11000, depositMin: 1500,  depositMax: 3000 },
-    FAMILY:   { price4h: 1200,  price24h: 3000,  price7d: 13000, depositMin: 2000,  depositMax: 4000 },
-    SPORT:    { price4h: 2500,  price24h: 6000,  price7d: 27000, depositMin: 5000,  depositMax: 15000 },
-    PRESTIGE: { price4h: 7500,  price24h: 18000, price7d: 80000, depositMin: 20000, depositMax: 100000 },
-    EVENT:    { price4h: 0,     price24h: 0,     price7d: 0,     depositMin: 0,     depositMax: 0 },
-    UTILITY:  { price4h: 500,   price24h: 1200,  price7d: 5500,  depositMin: 500,   depositMax: 1000 }
-};
+function mapCategoryRow(row) {
+    return {
+        code: row.code,
+        label: row.label,
+        price4h: Number(row.price_4h),
+        price24h: Number(row.price_24h),
+        price7d: Number(row.price_7d),
+        depositMin: Number(row.deposit_min),
+        depositMax: Number(row.deposit_max)
+    };
+}
+
+async function getAllCategories() {
+    if (_categoriesCache) return _categoriesCache;
+    const { data, error } = await supabaseClient.from("vehicle_categories").select("*").order("code");
+    if (error) {
+        console.error("getAllCategories:", error);
+        return [];
+    }
+    _categoriesCache = data.map(mapCategoryRow);
+    return _categoriesCache;
+}
+
+/* Réservé au Directeur (grade 10) / admin côté interface — la table
+   est aussi protégée par RLS côté Supabase. */
+async function addVehicleCategory(data) {
+    const code = data.code.trim().toUpperCase().replace(/[^A-Z0-9_]/g, "");
+    const { error } = await supabaseClient.from("vehicle_categories").insert({
+        code: code,
+        label: data.label,
+        price_4h: data.price4h || 0,
+        price_24h: data.price24h || 0,
+        price_7d: data.price7d || 0,
+        deposit_min: data.depositMin || 0,
+        deposit_max: data.depositMax || 0
+    });
+    if (error) {
+        return { ok: false, error: error.code === "23505" ? "Ce code de catégorie existe déjà." : error.message };
+    }
+    _categoriesCache = null; // force un rechargement au prochain getAllCategories()
+    return { ok: true, code: code };
+}
+
+function getEffectivePricing(categoryCode) {
+    const cat = _categoriesCache && _categoriesCache.find(function (c) { return c.code === categoryCode; });
+    if (cat) return cat;
+    return { price4h: 0, price24h: 0, price7d: 0, depositMin: 0, depositMax: 0 };
+}
 
 const DELIVERY_ZONES = [
     { code: "agence", label: "Retrait en agence", price: 0 },
@@ -80,6 +115,7 @@ function slugify(str) {
 }
 
 async function getAllVehicles() {
+    await getAllCategories(); // garantit que les libellés de catégorie sont disponibles
     const { data, error } = await supabaseClient.from("vehicles").select("*").order("name");
     if (error) {
         console.error("getAllVehicles:", error);
@@ -89,6 +125,7 @@ async function getAllVehicles() {
 }
 
 async function getVehicleById(id) {
+    await getAllCategories();
     const { data, error } = await supabaseClient.from("vehicles").select("*").eq("id", id).maybeSingle();
     if (error || !data) return null;
     return mapVehicleRow(data);
@@ -155,7 +192,7 @@ async function deleteVehicle(id) {
 }
 
 function getCategoryLabel(code) {
-    const cat = CATEGORIES.find(function (c) { return c.code === code; });
+    const cat = _categoriesCache && _categoriesCache.find(function (c) { return c.code === code; });
     return cat ? cat.label : code;
 }
 
@@ -179,25 +216,6 @@ async function setVehicleStatus(vehicleId, statusCode) {
 
 function getStatusMeta(code) {
     return VEHICLE_STATUSES.find(function (s) { return s.code === code; }) || VEHICLE_STATUSES[0];
-}
-
-/* ============================================================
-   1ter. GESTION DES PRIX (surcharge par catégorie)
-   ============================================================ */
-
-function getPricingOverrides() {
-    return storageGet(STORAGE_KEYS.PRICING_OVERRIDES, {});
-}
-
-function getEffectivePricing(categoryCode) {
-    const overrides = getPricingOverrides();
-    return Object.assign({}, PRICING[categoryCode], overrides[categoryCode] || {});
-}
-
-function setPricingOverride(categoryCode, values) {
-    const overrides = getPricingOverrides();
-    overrides[categoryCode] = values;
-    storageSet(STORAGE_KEYS.PRICING_OVERRIDES, overrides);
 }
 
 /* ============================================================

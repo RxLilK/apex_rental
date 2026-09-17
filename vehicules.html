@@ -100,8 +100,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     grid.innerHTML = '<p class="text-silver">Chargement des véhicules...</p>';
     const allVehicles = await getAllVehicles();
+    const allCategories = await getAllCategories();
 
-    CATEGORIES.forEach(function (c) {
+    allCategories.forEach(function (c) {
         const opt = document.createElement("option");
         opt.value = c.code;
         opt.textContent = c.label;

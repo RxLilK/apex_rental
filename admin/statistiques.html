@@ -66,9 +66,10 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     const allVehicles = await getAllVehicles();
     const reservations = await getAllReservations();
+    const allCategories = await getAllCategories();
 
     // Véhicules par catégorie
-    const catCounts = CATEGORIES.map(function (c) {
+    const catCounts = allCategories.map(function (c) {
         return { label: c.label.replace("Apex ", ""), value: allVehicles.filter(function (v) { return v.category === c.code; }).length };
     });
     renderBarChart("chartCategories", catCounts);

@@ -136,8 +136,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             : '<tr><td colspan="8" class="text-silver">Aucun client enregistré.</td></tr>';
 
         document.querySelectorAll(".statusSelect").forEach(function (select) {
-            select.addEventListener("change", function () {
-                setUserClubTier(select.getAttribute("data-id"), select.value);
+            const previousValue = select.value;
+            select.addEventListener("change", async function () {
+                const result = await setUserClubTier(select.getAttribute("data-id"), select.value);
+                if (!result.ok) {
+                    alert("Erreur : " + result.error);
+                    select.value = previousValue;
+                }
             });
         });
         document.querySelectorAll(".gradeSelect").forEach(function (select) {

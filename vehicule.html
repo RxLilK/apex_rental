@@ -36,6 +36,11 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", async function () {
+    await initSupabaseSession();
+    const currentClient = getCurrentUser();
+    const eligibleTiers = ["apex-club", "apex-black"];
+    const canReserve = currentClient && eligibleTiers.indexOf(currentClient.clubTier) !== -1;
+
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
     const vehicle = await getVehicleById(id);
@@ -102,7 +107,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         '      <ul class="mt-1" style="font-size:12px; color:rgba(245,245,245,0.8); line-height:1.9;">' + deliveryOptions + '</ul>' +
         '    </div>' +
 
-        '    <a href="reservation.html?id=' + vehicle.id + '" class="btn btn-primary btn-block mt-3">Réserver ce véhicule</a>' +
+        '    ' + (canReserve
+            ? '<a href="reservation.html?id=' + vehicle.id + '" class="btn btn-primary btn-block mt-3">Réserver ce véhicule</a>'
+            : '<button type="button" disabled class="btn btn-block mt-3" style="background:rgba(255,255,255,0.06); color:rgba(184,188,194,0.5); cursor:not-allowed; border:1px solid rgba(255,255,255,0.08);">Réservé Apex Club &amp; Apex Black</button>' +
+              '<a href="club.html" class="btn btn-outline btn-block mt-2">Découvrir Apex Club</a>') +
         '  </div>' +
         '</div>' +
 

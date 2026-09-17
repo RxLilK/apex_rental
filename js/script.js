@@ -460,7 +460,11 @@ async function updateIncidentStatus(reference, status) {
 
 async function setUserClubTier(userId, tier) {
     const { error } = await supabaseClient.from("profiles").update({ club_tier: tier }).eq("id", userId);
-    if (error) console.error("setUserClubTier:", error);
+    if (error) {
+        console.error("setUserClubTier:", error);
+        return { ok: false, error: error.message };
+    }
+    return { ok: true };
 }
 
 /* ============================================================

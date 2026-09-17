@@ -77,7 +77,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.querySelectorAll(".tierSelect").forEach(function (select) {
             select.addEventListener("change", async function () {
                 select.disabled = true;
-                await setUserClubTier(select.getAttribute("data-id"), select.value);
+                const result = await setUserClubTier(select.getAttribute("data-id"), select.value);
+                if (!result.ok) alert("Erreur : " + result.error);
                 renderTable();
             });
         });

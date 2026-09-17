@@ -322,11 +322,19 @@ returns boolean language sql security definer stable as $$
   select public.current_role() in ('admin', 'employee');
 $$;
 
+create or replace function public.is_admin_or_director()
+returns boolean language sql security definer stable as $$
+  select public.current_role() = 'admin' or exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'employee' and grade_code = 'director'
+  );
+$$;
+
 -- Profils : chacun voit le sien, le staff voit tout
 create policy "voir son profil ou staff" on public.profiles for select
   using (id = auth.uid() or public.is_staff());
 create policy "modifier son profil ou staff" on public.profiles for update
-  using (id = auth.uid() or public.current_role() = 'admin');
+  using (id = auth.uid() or public.is_admin_or_director());
 
 -- Véhicules : catalogue public en lecture, modification staff uniquement
 create policy "vehicules visibles par tous" on public.vehicles for select using (true);
@@ -337,23 +345,27 @@ create policy "staff modifie les vehicules" on public.vehicles for all
 create policy "voir ses reservations ou staff" on public.reservations for select
   using (user_id = auth.uid() or public.is_staff());
 create policy "creer sa reservation" on public.reservations for insert
-  with check (user_id = auth.uid() or public.is_staff());
+  with check (
+    public.is_staff()
+    or (
+      user_id = auth.uid()
+      and exists (
+        select 1 from public.profiles
+        where id = auth.uid() and club_tier in ('apex-club', 'apex-black')
+      )
+    )
+  );
 create policy "staff modifie reservations" on public.reservations for update
   using (public.is_staff());
 create policy "admin ou directeur supprime reservations" on public.reservations for delete
-  using (
-    public.current_role() = 'admin'
-    or (
-      public.current_role() = 'employee'
-      and exists (select 1 from public.profiles where id = auth.uid() and grade_code = 'director')
-    )
-  );
+  using (public.is_admin_or_director());
 
 -- Incidents, finances, permissions, config VIP, comptabilité : staff uniquement
 create policy "staff gere incidents" on public.incidents for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff gere grade_permissions" on public.grade_permissions for all using (public.is_staff()) with check (public.is_staff());
 create policy "tout le monde lit club_tier_config" on public.club_tier_config for select using (true);
 create policy "staff modifie club_tier_config" on public.club_tier_config for update using (public.is_staff());
+create policy "staff insere club_tier_config" on public.club_tier_config for insert with check (public.is_staff());
 create policy "staff gere accounting" on public.accounting_entries for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff gere finance_entries" on public.finance_entries for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff gere client_grades" on public.client_grades for all using (public.is_staff()) with check (public.is_staff());

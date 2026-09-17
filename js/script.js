@@ -701,6 +701,7 @@ const ADMIN_NAV_LINKS = [
         group: true,
         children: [
             { href: "reservations.html", label: "Réservations", capability: "reservations" },
+            { href: "nouvelle-reservation.html", label: "Nouvelle réservation", capability: "reservations", requireEdit: true },
             { href: "calendrier.html", label: "Calendrier", capability: "reservations" },
             { href: "clients.html", label: "Clients", capability: "clients" },
             { href: "abonnements.html", label: "Abonnements", capability: "abonnements" },
@@ -725,7 +726,7 @@ const ADMIN_NAV_LINKS = [
 function canSeeAdminLink(user, link) {
     if (link.capability === null) return true;
     if (link.capability === "admin-only") return user && user.role === "admin";
-    return userHasPermission(user, link.capability, "view");
+    return userHasPermission(user, link.capability, link.requireEdit ? "edit" : "view");
 }
 
 function renderAdminSidebar(activeHref) {

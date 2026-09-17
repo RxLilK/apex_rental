@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Nouvelle réservation — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+<style>
+    .radio-card { display:flex; align-items:flex-start; gap:12px; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:14px; margin-bottom:10px; cursor:pointer; transition:all .2s ease; }
+    .radio-card:hover { border-color: rgba(var(--apex-red-rgb),0.4); }
+    .radio-card.selected { border-color: var(--apex-red); background: rgba(var(--apex-red-rgb),0.06); }
+    .radio-card input { margin-top:3px; }
+    .radio-card .rc-title { font-family: var(--font-heading); font-size:14px; color: var(--apex-white); }
+    .radio-card .rc-desc { font-size:12px; color: rgba(184,188,194,0.7); margin-top:2px; }
+    .radio-card .rc-price { margin-left:auto; font-family: var(--font-heading); font-size:14px; color: var(--apex-white); white-space:nowrap; }
+    .summary-row { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.08); font-size:13px; }
+    .summary-row.total { font-family: var(--font-heading); font-size:16px; border-bottom:none; padding-top:16px; }
+    .summary-row.total .value { color: var(--apex-red); }
+</style>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Nouvelle réservation</h1>
+        <p class="section-subtitle">Réserve directement un véhicule pour le compte d'un client. Les avantages de son abonnement (Apex Club/Black) s'appliquent automatiquement.</p>
+
+        <div id="noPermission" class="hidden"></div>
+
+        <div id="bookingForm" style="max-width:640px;">
+            <div class="form-group mt-3">
+                <label for="clientSelect">Client</label>
+                <select id="clientSelect"></select>
+                <p class="text-silver mt-1" style="font-size:11px;" id="clientTierNote"></p>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="vehicleSelect">Véhicule</label>
+                    <select id="vehicleSelect"></select>
+                </div>
+                <div class="form-group">
+                    <label>&nbsp;</label>
+                    <div id="vehiclePreview" class="text-silver" style="font-size:12px;"></div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group"><label for="startDate">Date de départ</label><input type="date" id="startDate"></div>
+                <div class="form-group"><label for="startTime">Heure de départ</label><input type="time" id="startTime" value="10:00"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label for="endDate">Date de retour</label><input type="date" id="endDate"></div>
+                <div class="form-group"><label for="endTime">Heure de retour</label><input type="time" id="endTime" value="10:00"></div>
+            </div>
+
+            <h3 class="mt-3" style="font-size:14px; color:var(--apex-white);">Assurance</h3>
+            <div id="insuranceOptions" class="mt-2"></div>
+
+            <h3 class="mt-3" style="font-size:14px; color:var(--apex-white);">Livraison</h3>
+            <div id="deliveryOptions" class="mt-2"></div>
+
+            <div class="card mt-3" id="summaryCard"></div>
+
+            <div id="formError" class="form-error hidden mt-3"></div>
+            <button type="button" class="btn btn-primary btn-block mt-3" id="submitBtn">Créer la réservation</button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("nouvelle-reservation.html");
+    if (!userHasPermission(user, "reservations", "edit")) {
+        document.getElementById("bookingForm").classList.add("hidden");
+        document.getElementById("noPermission").innerHTML = '<p class="text-silver">Tu n\'as pas la permission de créer des réservations.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        document.getElementById("noPermission").classList.remove("hidden");
+        return;
+    }
+
+    const [allVehicles, clientRowsResult] = await Promise.all([
+        getAllVehicles(),
+        supabaseClient.from("profiles").select("*").eq("role", "client")
+    ]);
+    const clients = clientRowsResult.data || [];
+
+    if (!clients.length) {
+        document.getElementById("bookingForm").innerHTML = '<p class="text-silver">Aucun client enregistré pour le moment.</p>';
+        return;
+    }
+
+    const clientSelect = document.getElementById("clientSelect");
+    clients.forEach(function (c) {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        const name = (c.first_name || "") + " " + (c.last_name || "");
+        opt.textContent = (c.business_name ? c.business_name + " — " : "") + name.trim() + " (" + (c.email || "sans e-mail") + ")";
+        clientSelect.appendChild(opt);
+    });
+
+    const vehicleSelect = document.getElementById("vehicleSelect");
+    allVehicles.forEach(function (v) {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = v.name + " — " + getCategoryLabel(v.category);
+        vehicleSelect.appendChild(opt);
+    });
+
+    function findVehicle(id) { return allVehicles.find(function (v) { return v.id === id; }); }
+    function findClient(id) { return clients.find(function (c) { return c.id === id; }); }
+
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 24 * 3600 * 1000);
+    document.getElementById("startDate").value = toLocalDateKey(today);
+    document.getElementById("endDate").value = toLocalDateKey(tomorrow);
+
+    let tierInfo = CLUB_TIER_INFO.none;
+
+    async function refreshTierInfo() {
+        const client = findClient(clientSelect.value);
+        const tier = (client && client.club_tier) || "none";
+        tierInfo = await getEffectiveClubTierInfo(tier);
+        document.getElementById("clientTierNote").textContent = tier !== "none"
+            ? "Abonnement : " + tierInfo.label + " — avantages appliqués automatiquement ci-dessous."
+            : "Client standard — aucun avantage VIP.";
+        renderInsuranceOptions();
+        renderDeliveryOptions();
+        renderSummary();
+    }
+
+    function getDurationHours() {
+        const start = new Date(document.getElementById("startDate").value + "T" + document.getElementById("startTime").value);
+        const end = new Date(document.getElementById("endDate").value + "T" + document.getElementById("endTime").value);
+        return Math.max(1, Math.round((end - start) / 3600000));
+    }
+
+    function pickRentalPrice(vehicle, hours) {
+        let base, label;
+        if (hours >= 168) { base = vehicle.price7d; label = "7 jours"; }
+        else if (hours >= 24) { base = vehicle.price24h; label = "24 heures"; }
+        else { base = vehicle.price4h; label = "4 heures"; }
+        const discounted = Math.round(base * (1 - tierInfo.rentalDiscount));
+        return { price: discounted, basePrice: base, label: label };
+    }
+
+    const state = { insurance: "basic", delivery: "agence" };
+
+    function renderInsuranceOptions() {
+        const mount = document.getElementById("insuranceOptions");
+        mount.innerHTML = INSURANCE_LEVELS.map(function (i, idx) {
+            const selected = i.code === state.insurance;
+            const priceLabel = tierInfo.freeInsurance
+                ? (i.price > 0 ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px;">' + i.price.toLocaleString("fr-FR") + ' $</span>Offerte' : 'Inclus')
+                : (i.price > 0 ? i.price.toLocaleString("fr-FR") + ' $' : 'Inclus');
+            return (
+                '<label class="radio-card' + (selected ? ' selected' : '') + '" data-code="' + i.code + '">' +
+                '  <input type="radio" name="insurance" value="' + i.code + '"' + (selected ? ' checked' : '') + '>' +
+                '  <div><div class="rc-title">' + i.label + '</div><div class="rc-desc">' + i.desc + '</div></div>' +
+                '  <div class="rc-price">' + priceLabel + '</div>' +
+                '</label>'
+            );
+        }).join("");
+        mount.querySelectorAll(".radio-card").forEach(function (card) {
+            card.addEventListener("click", function () {
+                mount.querySelectorAll(".radio-card").forEach(function (c) { c.classList.remove("selected"); });
+                card.classList.add("selected");
+                card.querySelector("input").checked = true;
+                state.insurance = card.getAttribute("data-code");
+                renderSummary();
+            });
+        });
+    }
+
+    function renderDeliveryOptions() {
+        const mount = document.getElementById("deliveryOptions");
+        mount.innerHTML = DELIVERY_ZONES.map(function (z, idx) {
+            const selected = z.code === state.delivery;
+            const priceLabel = tierInfo.freeDelivery
+                ? (z.price > 0 ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px;">' + z.price.toLocaleString("fr-FR") + ' $</span>Gratuit' : 'Gratuit')
+                : (z.price > 0 ? z.price.toLocaleString("fr-FR") + ' $' : 'Gratuit');
+            return (
+                '<label class="radio-card' + (selected ? ' selected' : '') + '" data-code="' + z.code + '">' +
+                '  <input type="radio" name="delivery" value="' + z.code + '"' + (selected ? ' checked' : '') + '>' +
+                '  <div class="rc-title">' + z.label + '</div>' +
+                '  <div class="rc-price">' + priceLabel + '</div>' +
+                '</label>'
+            );
+        }).join("");
+        mount.querySelectorAll(".radio-card").forEach(function (card) {
+            card.addEventListener("click", function () {
+                mount.querySelectorAll(".radio-card").forEach(function (c) { c.classList.remove("selected"); });
+                card.classList.add("selected");
+                card.querySelector("input").checked = true;
+                state.delivery = card.getAttribute("data-code");
+                renderSummary();
+            });
+        });
+    }
+
+    function computeTotals() {
+        const vehicle = findVehicle(vehicleSelect.value);
+        const hours = getDurationHours();
+        const rental = pickRentalPrice(vehicle, hours);
+        const insuranceLevel = INSURANCE_LEVELS.find(function (i) { return i.code === state.insurance; });
+        const insurancePrice = tierInfo.freeInsurance ? 0 : insuranceLevel.price;
+        const insurance = Object.assign({}, insuranceLevel, { price: insurancePrice, originalPrice: insuranceLevel.price });
+        const deliveryZone = DELIVERY_ZONES.find(function (z) { return z.code === state.delivery; });
+        const deliveryPrice = tierInfo.freeDelivery ? 0 : deliveryZone.price;
+        const delivery = Object.assign({}, deliveryZone, { price: deliveryPrice, originalPrice: deliveryZone.price });
+        const total = rental.price + insurance.price + delivery.price;
+        return { vehicle: vehicle, hours: hours, rental: rental, insurance: insurance, delivery: delivery, total: total };
+    }
+
+    function renderSummary() {
+        const t = computeTotals();
+        document.getElementById("vehiclePreview").textContent = t.vehicle.deposit.toLocaleString("fr-FR") + " $ de caution — " + t.vehicle.power + " hp";
+        document.getElementById("summaryCard").innerHTML =
+            '<div class="summary-row"><span>Location (' + t.rental.label + ')</span><span>' + t.rental.price.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>Assurance (' + t.insurance.label + ')</span><span>' + (t.insurance.price > 0 ? t.insurance.price.toLocaleString("fr-FR") + ' $' : 'Inclus/Offerte') + '</span></div>' +
+            '<div class="summary-row"><span>Livraison (' + t.delivery.label + ')</span><span>' + (t.delivery.price > 0 ? t.delivery.price.toLocaleString("fr-FR") + ' $' : 'Gratuit') + '</span></div>' +
+            '<div class="summary-row total"><span>TOTAL</span><span class="value">' + t.total.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<p class="text-silver mt-1" style="font-size:12px;">Caution : ' + t.vehicle.deposit.toLocaleString("fr-FR") + ' $</p>';
+    }
+
+    clientSelect.addEventListener("change", refreshTierInfo);
+    vehicleSelect.addEventListener("change", renderSummary);
+    ["startDate", "startTime", "endDate", "endTime"].forEach(function (id) {
+        document.getElementById(id).addEventListener("change", renderSummary);
+    });
+
+    document.getElementById("submitBtn").addEventListener("click", async function () {
+        const errorBox = document.getElementById("formError");
+        errorBox.classList.add("hidden");
+        const btn = this;
+        btn.disabled = true;
+        btn.textContent = "Création...";
+
+        const t = computeTotals();
+        const client = findClient(clientSelect.value);
+
+        const reference = await createReservation({
+            userId: client.id,
+            vehicleId: t.vehicle.id,
+            vehicleName: t.vehicle.name,
+            startDate: document.getElementById("startDate").value,
+            startTime: document.getElementById("startTime").value,
+            endDate: document.getElementById("endDate").value,
+            endTime: document.getElementById("endTime").value,
+            insurance: t.insurance.code,
+            insurancePrice: t.insurance.price,
+            delivery: t.delivery.code,
+            deliveryPrice: t.delivery.price,
+            rentalPrice: t.rental.price,
+            rentalBasePrice: t.rental.basePrice,
+            appliedClubTier: client.club_tier !== "none" ? client.club_tier : "",
+            rentalDiscountPercent: tierInfo.rentalDiscount * 100,
+            deliverySavings: t.delivery.originalPrice > 0 ? t.delivery.originalPrice - t.delivery.price : 0,
+            insuranceSavings: t.insurance.originalPrice > 0 ? t.insurance.originalPrice - t.insurance.price : 0,
+            total: t.total,
+            deposit: t.vehicle.deposit
+        });
+
+        btn.disabled = false;
+        btn.textContent = "Créer la réservation";
+
+        if (!reference) {
+            errorBox.textContent = "Une erreur est survenue, réessaie.";
+            errorBox.classList.remove("hidden");
+            return;
+        }
+
+        navigateWithFade("reservations.html");
+    });
+
+    await refreshTierInfo();
+});
+</script>
+
+</body>
+</html>

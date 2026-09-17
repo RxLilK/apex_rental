@@ -930,6 +930,26 @@ body.home-page {
     font-size: 20px;
 }
 
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+    gap: 12px;
+}
+
+.summary-row.total {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    border-bottom: none;
+    padding-top: 16px;
+}
+
+.summary-row.total .value {
+    color: var(--apex-red);
+}
+
 /* ---------- FOOTER ---------- */
 .site-footer {
     border-top: 1px solid rgba(255,255,255,0.08);

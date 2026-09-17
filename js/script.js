@@ -391,6 +391,62 @@ function getReservationStatusMeta(status) {
     return RESERVATION_STATUS_META[status] || RESERVATION_STATUS_META.pending;
 }
 
+/* ============================================================
+   3ter. MODALE DE DÉTAILS D'UNE RÉSERVATION (client + admin)
+   ============================================================ */
+
+function ensureReservationDetailsModal() {
+    let overlay = document.getElementById("reservationDetailsOverlay");
+    if (overlay) return overlay;
+
+    overlay = document.createElement("div");
+    overlay.id = "reservationDetailsOverlay";
+    overlay.className = "modal-overlay";
+    overlay.innerHTML =
+        '<div class="modal">' +
+        '  <button type="button" class="modal-close" id="closeReservationDetailsBtn">&times;</button>' +
+        '  <h2 class="section-title" style="font-size:20px;">Détails de la réservation</h2>' +
+        '  <div id="reservationDetailsBody" class="mt-3"></div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) overlay.classList.remove("open");
+    });
+    document.getElementById("closeReservationDetailsBtn").addEventListener("click", function () {
+        overlay.classList.remove("open");
+    });
+
+    return overlay;
+}
+
+function showReservationDetails(r, clientLabel) {
+    const overlay = ensureReservationDetailsModal();
+    const meta = getReservationStatusMeta(r.status);
+    const insurance = INSURANCE_LEVELS.find(function (i) { return i.code === r.insurance; });
+    const delivery = DELIVERY_ZONES.find(function (z) { return z.code === r.delivery; });
+    const tierLabel = r.appliedClubTier ? (CLUB_TIER_INFO[r.appliedClubTier] || {}).label : null;
+
+    document.getElementById("reservationDetailsBody").innerHTML =
+        '<div class="summary-row"><span>Référence</span><span>' + r.reference + '</span></div>' +
+        (clientLabel ? '<div class="summary-row"><span>Client</span><span>' + clientLabel + '</span></div>' : '') +
+        '<div class="summary-row"><span>Véhicule</span><span>' + r.vehicleName + '</span></div>' +
+        '<div class="summary-row"><span>Départ</span><span>' + r.startDate + ' à ' + r.startTime + '</span></div>' +
+        '<div class="summary-row"><span>Retour</span><span>' + r.endDate + ' à ' + r.endTime + '</span></div>' +
+        '<div class="summary-row"><span>Assurance</span><span>' + (insurance ? insurance.label : r.insurance) + ' — ' + (r.insurancePrice > 0 ? r.insurancePrice.toLocaleString("fr-FR") + " $" : "Inclus/Offerte") + '</span></div>' +
+        '<div class="summary-row"><span>Livraison</span><span>' + (delivery ? delivery.label : r.delivery) + ' — ' + (r.deliveryPrice > 0 ? r.deliveryPrice.toLocaleString("fr-FR") + " $" : "Gratuit") + '</span></div>' +
+        '<div class="summary-row"><span>Prix location</span><span>' +
+        (r.rentalDiscountPercent > 0 ? '<span style="text-decoration:line-through; color:rgba(184,188,194,0.5); margin-right:6px;">' + (r.rentalBasePrice || r.rentalPrice).toLocaleString("fr-FR") + ' $</span>' : '') +
+        r.rentalPrice.toLocaleString("fr-FR") + ' $</span></div>' +
+        (tierLabel ? '<div class="summary-row"><span>Avantages appliqués</span><span class="text-red">' + tierLabel + (r.rentalDiscountPercent > 0 ? ' (-' + r.rentalDiscountPercent + '%)' : '') + '</span></div>' : '') +
+        '<div class="summary-row total"><span>TOTAL</span><span class="value">' + r.total.toLocaleString("fr-FR") + ' $</span></div>' +
+        '<div class="summary-row"><span>Caution</span><span>' + r.deposit.toLocaleString("fr-FR") + ' $</span></div>' +
+        '<div class="summary-row"><span>Statut</span><span><span class="badge ' + meta.badge + '">' + meta.label + '</span></span></div>' +
+        '<div class="summary-row"><span>Créée le</span><span>' + isoToLocalDateKey(r.createdAt) + '</span></div>';
+
+    overlay.classList.add("open");
+}
+
 async function updateReservationStatus(reference, status) {
     const { error } = await supabaseClient.from("reservations").update({ status: status }).eq("reference", reference);
     if (error) console.error("updateReservationStatus:", error);

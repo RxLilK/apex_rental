@@ -50,10 +50,11 @@ document.addEventListener("DOMContentLoaded", async function () {
                 '<td>' + r.endDate + ' ' + r.endTime + '</td>' +
                 '<td>' + r.total.toLocaleString("fr-FR") + ' $</td>' +
                 '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                '<td><button type="button" class="btn btn-outline btn-sm viewDetailsBtn" data-ref="' + r.reference + '">Détails</button></td>' +
                 '</tr>'
             );
         }).join("")
-        : '<tr><td colspan="6" class="text-silver">Aucune réservation pour le moment.</td></tr>';
+        : '<tr><td colspan="7" class="text-silver">Aucune réservation pour le moment.</td></tr>';
 
     const currentRentalsHTML = currentRentals.length
         ? currentRentals.map(function (r) {
@@ -95,13 +96,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         '<h2 class="section-title mt-4" style="font-size:18px;">Mes réservations</h2>' +
         '<div class="table-wrap mt-2">' +
         '  <table class="table">' +
-        '    <thead><tr><th>Référence</th><th>Véhicule</th><th>Départ</th><th>Retour</th><th>Total</th><th>Statut</th></tr></thead>' +
+        '    <thead><tr><th>Référence</th><th>Véhicule</th><th>Départ</th><th>Retour</th><th>Total</th><th>Statut</th><th>Actions</th></tr></thead>' +
         '    <tbody>' + rowsHTML + '</tbody>' +
         '  </table>' +
         '</div>' +
 
         '<a href="../vehicules.html" class="btn btn-primary mt-4">Réserver un nouveau véhicule</a>';
 
+    document.querySelectorAll(".viewDetailsBtn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            const r = reservations.find(function (x) { return x.reference === btn.getAttribute("data-ref"); });
+            if (r) showReservationDetails(r);
+        });
+    });
 });
 </script>
 

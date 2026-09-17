@@ -111,6 +111,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 if (canDelete) {
                     actions.push('<button class="btn btn-outline btn-sm deleteRes" data-ref="' + r.reference + '" style="color:var(--apex-red); border-color:rgba(var(--apex-red-rgb),0.4);">Supprimer</button>');
                 }
+                actions.push('<button class="btn btn-outline btn-sm viewDetailsBtn" data-ref="' + r.reference + '">Détails</button>');
 
                 return (
                     '<tr>' +
@@ -148,6 +149,12 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
                 allReservations = await getAllReservations();
                 renderTable();
+            });
+        });
+        document.querySelectorAll(".viewDetailsBtn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                const r = reservations.find(function (x) { return x.reference === btn.getAttribute("data-ref"); });
+                if (r) showReservationDetails(r, clientName(r.userId));
             });
         });
     }

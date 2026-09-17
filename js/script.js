@@ -393,6 +393,17 @@ async function updateReservationStatus(reference, status) {
     if (error) console.error("updateReservationStatus:", error);
 }
 
+/* Suppression définitive d'une réservation — réservée au Directeur
+   (grade 10) et à l'admin côté interface (voir canManageClubTiers). */
+async function deleteReservation(reference) {
+    const { error } = await supabaseClient.from("reservations").delete().eq("reference", reference);
+    if (error) {
+        console.error("deleteReservation:", error);
+        return { ok: false, error: error.message };
+    }
+    return { ok: true };
+}
+
 function mapIncidentRow(row) {
     return {
         reference: row.reference,
@@ -838,6 +849,12 @@ function canManageClubTiers(user) {
     if (!user) return false;
     if (user.role === "admin") return true;
     return user.role === "employee" && getGradeMeta(user.gradeCode).level === 10;
+}
+
+/* Alias générique : réservé au Directeur (grade 10) et à l'admin,
+   pour toute action sensible (suppression définitive, etc.). */
+function isDirectorOrAdmin(user) {
+    return canManageClubTiers(user);
 }
 
 /* Renvoie le lundi (00:00) de la semaine d'une date donnée,

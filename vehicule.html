@@ -129,7 +129,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         const globallyUnavailable = vehicle.status === "maintenance" || vehicle.status === "unavailable";
         const weekReservations = globallyUnavailable
             ? []
-            : await getReservationsOverlappingRange({ vehicleId: vehicle.id }, toDateKey(weekDates[0]), toDateKey(weekDates[6]));
+            : (await getReservationsOverlappingRange({ vehicleId: vehicle.id }, toDateKey(weekDates[0]), toDateKey(weekDates[6])))
+                .filter(function (r) { return r.status !== "completed"; }); // une location terminée libère le véhicule
 
         document.getElementById("availabilityGrid").innerHTML = weekDates.map(function (d, i) {
             const dateKey = toDateKey(d);

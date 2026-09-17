@@ -59,6 +59,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
     const canEdit = userHasPermission(user, "reservations", "edit");
+    const canDelete = isDirectorOrAdmin(user);
 
     const { data: profileRows } = await supabaseClient.from("profiles").select("*");
     const users = profileRows || [];
@@ -107,6 +108,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                         actions.push('<button class="btn btn-outline btn-sm setStatus" data-ref="' + r.reference + '" data-status="cancelled">Annuler</button>');
                     }
                 }
+                if (canDelete) {
+                    actions.push('<button class="btn btn-outline btn-sm deleteRes" data-ref="' + r.reference + '" style="color:var(--apex-red); border-color:rgba(var(--apex-red-rgb),0.4);">Supprimer</button>');
+                }
 
                 return (
                     '<tr>' +
@@ -127,6 +131,21 @@ document.addEventListener("DOMContentLoaded", async function () {
             btn.addEventListener("click", async function () {
                 btn.disabled = true;
                 await updateReservationStatus(btn.getAttribute("data-ref"), btn.getAttribute("data-status"));
+                allReservations = await getAllReservations();
+                renderTable();
+            });
+        });
+        document.querySelectorAll(".deleteRes").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                const ref = btn.getAttribute("data-ref");
+                if (!confirm("Supprimer définitivement la réservation " + ref + " ? Cette action est irréversible.")) return;
+                btn.disabled = true;
+                const result = await deleteReservation(ref);
+                if (!result.ok) {
+                    alert("Erreur : " + result.error);
+                    btn.disabled = false;
+                    return;
+                }
                 allReservations = await getAllReservations();
                 renderTable();
             });

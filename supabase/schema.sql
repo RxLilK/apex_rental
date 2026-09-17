@@ -340,6 +340,14 @@ create policy "creer sa reservation" on public.reservations for insert
   with check (user_id = auth.uid());
 create policy "staff modifie reservations" on public.reservations for update
   using (public.is_staff());
+create policy "admin ou directeur supprime reservations" on public.reservations for delete
+  using (
+    public.current_role() = 'admin'
+    or (
+      public.current_role() = 'employee'
+      and exists (select 1 from public.profiles where id = auth.uid() and grade_code = 'director')
+    )
+  );
 
 -- Incidents, finances, permissions, config VIP, comptabilité : staff uniquement
 create policy "staff gere incidents" on public.incidents for all using (public.is_staff()) with check (public.is_staff());

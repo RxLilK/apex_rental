@@ -425,6 +425,51 @@ function getReservationStatusMeta(status) {
    3ter. MODALE DE DÉTAILS D'UNE RÉSERVATION (client + admin)
    ============================================================ */
 
+/* ============================================================
+   3bis-2. MODALE DE CONFIRMATION (remplace confirm() natif)
+   ============================================================ */
+
+function showConfirmModal(message) {
+    return new Promise(function (resolve) {
+        let overlay = document.getElementById("appConfirmOverlay");
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.id = "appConfirmOverlay";
+            overlay.className = "modal-overlay";
+            overlay.innerHTML =
+                '<div class="modal" style="max-width:420px;">' +
+                '  <p id="appConfirmMessage" style="color:var(--apex-white); font-size:14px; line-height:1.6;"></p>' +
+                '  <div class="mt-3" style="display:flex; gap:10px; justify-content:flex-end;">' +
+                '    <button type="button" class="btn btn-outline btn-sm" id="appConfirmCancel">Annuler</button>' +
+                '    <button type="button" class="btn btn-primary btn-sm" id="appConfirmOk">Confirmer</button>' +
+                '  </div>' +
+                '</div>';
+            document.body.appendChild(overlay);
+        }
+
+        document.getElementById("appConfirmMessage").textContent = message;
+        overlay.classList.add("open");
+
+        const okBtn = document.getElementById("appConfirmOk");
+        const cancelBtn = document.getElementById("appConfirmCancel");
+
+        function cleanup(result) {
+            overlay.classList.remove("open");
+            okBtn.removeEventListener("click", onOk);
+            cancelBtn.removeEventListener("click", onCancel);
+            overlay.removeEventListener("click", onOverlayClick);
+            resolve(result);
+        }
+        function onOk() { cleanup(true); }
+        function onCancel() { cleanup(false); }
+        function onOverlayClick(e) { if (e.target === overlay) cleanup(false); }
+
+        okBtn.addEventListener("click", onOk);
+        cancelBtn.addEventListener("click", onCancel);
+        overlay.addEventListener("click", onOverlayClick);
+    });
+}
+
 function ensureReservationDetailsModal() {
     let overlay = document.getElementById("reservationDetailsOverlay");
     if (overlay) return overlay;

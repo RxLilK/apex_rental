@@ -139,7 +139,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.querySelectorAll(".deleteRes").forEach(function (btn) {
             btn.addEventListener("click", async function () {
                 const ref = btn.getAttribute("data-ref");
-                if (!confirm("Supprimer définitivement la réservation " + ref + " ? Cette action est irréversible.")) return;
+                if (!(await showConfirmModal("Supprimer définitivement la réservation " + ref + " ? Cette action est irréversible."))) return;
                 btn.disabled = true;
                 const result = await deleteReservation(ref);
                 if (!result.ok) {

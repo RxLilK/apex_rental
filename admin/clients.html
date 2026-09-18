@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.querySelectorAll(".deleteGrade").forEach(function (btn) {
             btn.addEventListener("click", async function () {
                 const grade = btn.getAttribute("data-grade");
-                if (confirm('Supprimer le grade "' + grade + '" ? Il sera retiré des clients qui l\'ont.')) {
+                if (await showConfirmModal('Supprimer le grade "' + grade + '" ? Il sera retiré des clients qui l\'ont.')) {
                     await deleteClientGrade(grade);
                     grades = await getClientGrades();
                     renderGrades();

@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
         document.querySelectorAll(".removeEmp").forEach(function (btn) {
             btn.addEventListener("click", async function () {
-                if (!confirm("Rétrograder cet employé en simple client ?")) return;
+                if (!(await showConfirmModal("Rétrograder cet employé en simple client ?"))) return;
                 await demoteEmployeeToClient(btn.getAttribute("data-id"));
                 renderTable();
             });

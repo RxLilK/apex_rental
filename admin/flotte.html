@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     const warning = usedCount > 0
                         ? usedCount + " véhicule(s) utilisent encore cette catégorie — ils garderont juste le code brut comme libellé. "
                         : "";
-                    if (!confirm(warning + "Supprimer définitivement la catégorie " + code + " ?")) return;
+                    if (!(await showConfirmModal(warning + "Supprimer définitivement la catégorie " + code + " ?"))) return;
 
                     const result = await deleteVehicleCategory(code);
                     if (!result.ok) {
@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         tbody.querySelectorAll(".deleteVehicle").forEach(function (btn) {
             btn.addEventListener("click", async function () {
                 const v = list.find(function (x) { return x.id === btn.getAttribute("data-id"); });
-                if (v && confirm("Supprimer définitivement " + v.name + " de la flotte ?")) {
+                if (v && (await showConfirmModal("Supprimer définitivement " + v.name + " de la flotte ?"))) {
                     await deleteVehicle(v.id);
                     renderRows();
                 }

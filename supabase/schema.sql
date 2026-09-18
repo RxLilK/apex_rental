@@ -412,6 +412,7 @@ create policy "staff modifie business_requests" on public.business_requests for 
 create policy "creer sa demande media" on public.media_requests for insert with check (user_id = auth.uid());
 create policy "voir sa demande media ou staff" on public.media_requests for select using (user_id = auth.uid() or public.is_staff());
 create policy "staff modifie media_requests" on public.media_requests for update using (public.is_staff());
+create policy "admin ou directeur supprime media_requests" on public.media_requests for delete using (public.is_admin_or_director());
 
 -- ============================================================
 -- COMPTE ADMIN DE DÉMONSTRATION

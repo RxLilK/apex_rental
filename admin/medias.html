@@ -39,6 +39,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
     const canEdit = userHasPermission(user, "medias", "edit");
+    const canDelete = isDirectorOrAdmin(user);
 
     const { data: profileRows } = await supabaseClient.from("profiles").select("*");
     const profiles = profileRows || [];
@@ -72,6 +73,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                           '    <option value="resolved"' + (m.status === "resolved" ? " selected" : "") + '>Traitée</option>' +
                           '  </select>'
                         : '') +
+                    (canDelete ? ' <button class="btn btn-outline btn-sm deleteMediaBtn" data-id="' + m.id + '" style="color:var(--apex-red); border-color:rgba(var(--apex-red-rgb),0.4);">Supprimer</button>' : '') +
                     '</td>' +
                     '</tr>'
                 );
@@ -88,6 +90,20 @@ document.addEventListener("DOMContentLoaded", async function () {
             select.addEventListener("change", async function () {
                 select.disabled = true;
                 await setMediaRequestStatus(select.getAttribute("data-id"), select.value);
+                requests = await getMediaRequests();
+                renderTable();
+            });
+        });
+        document.querySelectorAll(".deleteMediaBtn").forEach(function (btn) {
+            btn.addEventListener("click", async function () {
+                if (!(await showConfirmModal("Supprimer définitivement cette demande Media ?"))) return;
+                btn.disabled = true;
+                const result = await deleteMediaRequest(btn.getAttribute("data-id"));
+                if (!result.ok) {
+                    alert("Erreur : " + result.error);
+                    btn.disabled = false;
+                    return;
+                }
                 requests = await getMediaRequests();
                 renderTable();
             });

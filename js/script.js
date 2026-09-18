@@ -767,6 +767,14 @@ async function setMediaRequestStatus(id, status) {
     if (error) console.error("setMediaRequestStatus:", error);
 }
 
+/* Réservé au Directeur (grade 10) / admin côté interface, et
+   protégé par RLS côté Supabase (is_admin_or_director). */
+async function deleteMediaRequest(id) {
+    const { error } = await supabaseClient.from("media_requests").delete().eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+}
+
 async function getMediaRequests() {
     const { data, error } = await supabaseClient.from("media_requests").select("*").order("created_at", { ascending: false });
     if (error) {

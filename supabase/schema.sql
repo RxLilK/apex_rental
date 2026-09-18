@@ -19,6 +19,7 @@ drop table if exists public.business_requests cascade;
 drop table if exists public.incidents cascade;
 drop table if exists public.reservations cascade;
 drop table if exists public.vehicles cascade;
+drop table if exists public.vehicle_categories cascade;
 drop table if exists public.profiles cascade;
 drop trigger if exists on_auth_user_created on auth.users;
 drop function if exists public.handle_new_auth_user();
@@ -370,6 +371,8 @@ create policy "categories visibles par tous" on public.vehicle_categories for se
 create policy "directeur ou admin ajoute categories" on public.vehicle_categories for insert
   with check (public.is_admin_or_director());
 create policy "directeur ou admin modifie categories" on public.vehicle_categories for update
+  using (public.is_admin_or_director());
+create policy "directeur ou admin supprime categories" on public.vehicle_categories for delete
   using (public.is_admin_or_director());
 
 -- Réservations : client voit les siennes, staff voit tout

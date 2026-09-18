@@ -166,8 +166,30 @@ document.addEventListener("DOMContentLoaded", async function () {
         async function renderCategoriesList() {
             const cats = await getAllCategories();
             document.getElementById("categoriesList").innerHTML = cats.map(function (c) {
-                return '<span class="badge badge-available">' + c.label + ' (' + c.code + ')</span>';
+                return '<span class="badge badge-available" style="display:inline-flex; align-items:center; gap:6px;">' +
+                    c.label + ' (' + c.code + ')' +
+                    '<button type="button" class="deleteCategoryBtn" data-code="' + c.code + '" style="color:inherit; font-size:13px; line-height:1; padding:0;" title="Supprimer cette catégorie">&times;</button>' +
+                    '</span>';
             }).join("");
+
+            document.querySelectorAll(".deleteCategoryBtn").forEach(function (btn) {
+                btn.addEventListener("click", async function () {
+                    const code = btn.getAttribute("data-code");
+                    const usedCount = (await getAllVehicles()).filter(function (v) { return v.category === code; }).length;
+                    const warning = usedCount > 0
+                        ? usedCount + " véhicule(s) utilisent encore cette catégorie — ils garderont juste le code brut comme libellé. "
+                        : "";
+                    if (!confirm(warning + "Supprimer définitivement la catégorie " + code + " ?")) return;
+
+                    const result = await deleteVehicleCategory(code);
+                    if (!result.ok) {
+                        alert("Erreur : " + result.error);
+                        return;
+                    }
+                    await renderCategoriesList();
+                    await populateCategorySelect();
+                });
+            });
         }
         renderCategoriesList();
 

@@ -58,6 +58,18 @@ async function addVehicleCategory(data) {
     return { ok: true, code: code };
 }
 
+/* Réservé au Directeur (grade 10) / admin. Les véhicules qui utilisaient
+   cette catégorie ne sont pas supprimés — leur libellé s'affichera juste
+   comme le code brut tant qu'ils ne sont pas réassignés. */
+async function deleteVehicleCategory(code) {
+    const { error } = await supabaseClient.from("vehicle_categories").delete().eq("code", code);
+    if (error) {
+        return { ok: false, error: error.message };
+    }
+    _categoriesCache = null;
+    return { ok: true };
+}
+
 function getEffectivePricing(categoryCode) {
     const cat = _categoriesCache && _categoriesCache.find(function (c) { return c.code === categoryCode; });
     if (cat) return cat;

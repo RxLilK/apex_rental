@@ -28,6 +28,10 @@ on conflict (code) do nothing;
 
 alter table public.vehicle_categories enable row level security;
 
+drop policy if exists "categories visibles par tous" on public.vehicle_categories;
+drop policy if exists "directeur ou admin ajoute categories" on public.vehicle_categories;
+drop policy if exists "directeur ou admin modifie categories" on public.vehicle_categories;
+
 create policy "categories visibles par tous" on public.vehicle_categories for select using (true);
 create policy "directeur ou admin ajoute categories" on public.vehicle_categories for insert
   with check (public.is_admin_or_director());

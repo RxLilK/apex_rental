@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Demandes Media — APEX RENTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;500;600&family=Montserrat:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+<script src="../js/script.js" defer></script>
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<div class="dashboard-layout">
+    <aside class="sidebar" id="admin-sidebar"></aside>
+    <div class="dashboard-main">
+        <h1 class="section-title">Demandes Media</h1>
+        <p class="section-subtitle">Demandes de mise à disposition de véhicules pour tournages et productions, envoyées depuis media.html.</p>
+
+        <div class="table-wrap mt-3">
+            <table class="table">
+                <thead><tr><th>Client</th><th>Projet</th><th>Type</th><th>Date</th><th>Budget</th><th>Statut</th><th>Action</th></tr></thead>
+                <tbody id="mediaBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+    const user = await requireAuth();
+    if (!user) return;
+    renderAdminSidebar("medias.html");
+    if (!userHasPermission(user, "medias", "view")) {
+        document.querySelector(".dashboard-main").innerHTML = '<p class="text-silver">Tu n\'as pas la permission d\'accéder à cette section.</p><a href="dashboard.html" class="btn btn-outline btn-sm mt-3">Retour au tableau de bord</a>';
+        return;
+    }
+    const canEdit = userHasPermission(user, "medias", "edit");
+
+    const { data: profileRows } = await supabaseClient.from("profiles").select("*");
+    const profiles = profileRows || [];
+    function clientName(userId) {
+        const u = profiles.find(function (p) { return p.id === userId; });
+        if (!u) return "—";
+        const fullName = (u.first_name || "") + " " + (u.last_name || "");
+        return u.business_name ? u.business_name + " (" + fullName.trim() + ")" : fullName.trim();
+    }
+
+    let requests = await getMediaRequests();
+
+    function renderTable() {
+        document.getElementById("mediaBody").innerHTML = requests.length
+            ? requests.map(function (m) {
+                const meta = getMediaStatusMeta(m.status);
+                return (
+                    '<tr>' +
+                    '<td>' + clientName(m.userId) + '</td>' +
+                    '<td>' + m.projectName + '</td>' +
+                    '<td>' + (m.projectType || '—') + '</td>' +
+                    '<td>' + (m.date || '—') + '</td>' +
+                    '<td>' + (m.budget ? Number(m.budget).toLocaleString("fr-FR") + " $" : '—') + '</td>' +
+                    '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                    '<td style="white-space:nowrap;">' +
+                    '  <button class="btn btn-outline btn-sm viewDetailsBtn" data-id="' + m.id + '">Détails</button> ' +
+                    (canEdit
+                        ? '  <select data-id="' + m.id + '" class="statusSelect" style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' +
+                          '    <option value="new"' + (m.status === "new" ? " selected" : "") + '>Nouvelle</option>' +
+                          '    <option value="in_progress"' + (m.status === "in_progress" ? " selected" : "") + '>En cours</option>' +
+                          '    <option value="resolved"' + (m.status === "resolved" ? " selected" : "") + '>Traitée</option>' +
+                          '  </select>'
+                        : '') +
+                    '</td>' +
+                    '</tr>'
+                );
+            }).join("")
+            : '<tr><td colspan="7" class="text-silver">Aucune demande Media pour le moment.</td></tr>';
+
+        document.querySelectorAll(".viewDetailsBtn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                const m = requests.find(function (x) { return x.id === btn.getAttribute("data-id"); });
+                if (m) showMediaRequestDetails(m, clientName(m.userId));
+            });
+        });
+        document.querySelectorAll(".statusSelect").forEach(function (select) {
+            select.addEventListener("change", async function () {
+                select.disabled = true;
+                await setMediaRequestStatus(select.getAttribute("data-id"), select.value);
+                requests = await getMediaRequests();
+                renderTable();
+            });
+        });
+    }
+
+    renderTable();
+});
+</script>
+
+</body>
+</html>

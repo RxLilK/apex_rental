@@ -72,6 +72,22 @@ document.addEventListener("DOMContentLoaded", async function () {
         }).join("")
         : '<p class="text-silver mt-2">Aucune location en cours actuellement.</p>';
 
+    const mediaRequests = await getMediaRequestsForUser(user.id);
+    const mediaRowsHTML = mediaRequests.length
+        ? mediaRequests.map(function (m) {
+            const meta = getMediaStatusMeta(m.status);
+            return (
+                '<tr>' +
+                '<td>' + m.projectName + '</td>' +
+                '<td>' + (m.projectType || '—') + '</td>' +
+                '<td>' + (m.date || '—') + '</td>' +
+                '<td><span class="badge ' + meta.badge + '">' + meta.label + '</span></td>' +
+                '<td><button type="button" class="btn btn-outline btn-sm viewMediaDetailsBtn" data-id="' + m.id + '">Détails</button></td>' +
+                '</tr>'
+            );
+        }).join("")
+        : '<tr><td colspan="5" class="text-silver">Aucune demande Media pour le moment.</td></tr>';
+
     document.getElementById("dashboardContent").innerHTML =
         '<h1 class="section-title">Bonjour, ' + user.firstName + (user.businessName ? ' <span class="text-silver" style="font-size:16px;">(' + user.businessName + ')</span>' : '') + '</h1>' +
 
@@ -101,12 +117,27 @@ document.addEventListener("DOMContentLoaded", async function () {
         '  </table>' +
         '</div>' +
 
-        '<a href="../vehicules.html" class="btn btn-primary mt-4">Réserver un nouveau véhicule</a>';
+        '<a href="../vehicules.html" class="btn btn-primary mt-4">Réserver un nouveau véhicule</a>' +
+
+        '<h2 class="section-title mt-4" style="font-size:18px;">Mes demandes Media</h2>' +
+        '<div class="table-wrap mt-2">' +
+        '  <table class="table">' +
+        '    <thead><tr><th>Projet</th><th>Type</th><th>Date</th><th>Statut</th><th>Actions</th></tr></thead>' +
+        '    <tbody>' + mediaRowsHTML + '</tbody>' +
+        '  </table>' +
+        '</div>' +
+        '<a href="../media.html" class="btn btn-outline mt-3">Envoyer une nouvelle demande Media</a>';
 
     document.querySelectorAll(".viewDetailsBtn").forEach(function (btn) {
         btn.addEventListener("click", function () {
             const r = reservations.find(function (x) { return x.reference === btn.getAttribute("data-ref"); });
             if (r) showReservationDetails(r);
+        });
+    });
+    document.querySelectorAll(".viewMediaDetailsBtn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            const m = mediaRequests.find(function (x) { return x.id === btn.getAttribute("data-id"); });
+            if (m) showMediaRequestDetails(m);
         });
     });
 });

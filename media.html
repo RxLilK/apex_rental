@@ -25,6 +25,14 @@
     <section class="section" style="padding-top:0;">
         <div class="container" style="max-width:680px;">
 
+            <div id="authNotice" class="card hidden" style="text-align:center;">
+                <p class="text-silver">Un compte APEX RENTAL est nécessaire pour envoyer une demande Media.</p>
+                <div class="mt-2" style="display:flex; gap:12px; justify-content:center;">
+                    <a href="connexion.html?redirect=media.html" class="btn btn-primary btn-sm">Se connecter</a>
+                    <a href="inscription.html?redirect=media.html" class="btn btn-outline btn-sm">Créer un compte</a>
+                </div>
+            </div>
+
             <div id="mediaSuccess" class="form-success hidden">Ta demande de devis a bien été enregistrée. L'équipe APEX MEDIA te recontactera.</div>
 
             <form id="mediaForm">
@@ -102,13 +110,22 @@
 <div id="site-footer"></div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", async function () {
+    await initSupabaseSession();
+    const user = getCurrentUser();
+    if (!user) {
+        document.getElementById("authNotice").classList.remove("hidden");
+        document.getElementById("mediaForm").classList.add("hidden");
+        return;
+    }
+
     document.getElementById("mediaForm").addEventListener("submit", async function (e) {
         e.preventDefault();
         const submitBtn = e.target.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
 
         const result = await submitMediaRequest({
+            userId: user.id,
             projectName: document.getElementById("projectName").value,
             projectType: document.getElementById("projectType").value,
             date: document.getElementById("projectDate").value,

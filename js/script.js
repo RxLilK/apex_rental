@@ -337,10 +337,11 @@ const CAPABILITIES = [
     { key: "finances", label: "Gérer les finances", page: "finances.html" },
     { key: "abonnements", label: "Gérer les abonnements", page: "abonnements.html" },
     { key: "entreprises", label: "Gérer les entreprises", page: "entreprises.html" },
+    { key: "medias", label: "Gérer les demandes Media", page: "medias.html" },
     { key: "statistiques", label: "Gérer les statistiques", page: "statistiques.html" }
 ];
 
-const MANAGEMENT_CAPABILITIES = ["flotte", "prix", "employes", "clients", "finances", "abonnements", "entreprises", "incidents", "statistiques"];
+const MANAGEMENT_CAPABILITIES = ["flotte", "prix", "employes", "clients", "finances", "abonnements", "entreprises", "medias", "incidents", "statistiques"];
 const OPERATIONAL_CAPABILITIES = ["reservations", "preparation", "livraisons", "recuperation", "inspections"];
 
 /* Permissions par défaut tant que l'admin n'a rien configuré pour
@@ -480,7 +481,7 @@ function ensureReservationDetailsModal() {
     overlay.innerHTML =
         '<div class="modal">' +
         '  <button type="button" class="modal-close" id="closeReservationDetailsBtn">&times;</button>' +
-        '  <h2 class="section-title" style="font-size:20px;">Détails de la réservation</h2>' +
+        '  <h2 class="section-title" style="font-size:20px;" id="reservationDetailsTitle">Détails de la réservation</h2>' +
         '  <div id="reservationDetailsBody" class="mt-3"></div>' +
         '</div>';
     document.body.appendChild(overlay);
@@ -497,6 +498,7 @@ function ensureReservationDetailsModal() {
 
 function showReservationDetails(r, clientLabel) {
     const overlay = ensureReservationDetailsModal();
+    document.getElementById("reservationDetailsTitle").textContent = "Détails de la réservation";
     const meta = getReservationStatusMeta(r.status);
     const insurance = INSURANCE_LEVELS.find(function (i) { return i.code === r.insurance; });
     const delivery = DELIVERY_ZONES.find(function (z) { return z.code === r.delivery; });
@@ -518,6 +520,39 @@ function showReservationDetails(r, clientLabel) {
         '<div class="summary-row"><span>Caution</span><span>' + r.deposit.toLocaleString("fr-FR") + ' $</span></div>' +
         '<div class="summary-row"><span>Statut</span><span><span class="badge ' + meta.badge + '">' + meta.label + '</span></span></div>' +
         '<div class="summary-row"><span>Créée le</span><span>' + isoToLocalDateKey(r.createdAt) + '</span></div>';
+
+    overlay.classList.add("open");
+}
+
+const MEDIA_STATUS_META = {
+    new: { label: "Nouvelle", badge: "badge-maintenance" },
+    in_progress: { label: "En cours de traitement", badge: "badge-maintenance" },
+    resolved: { label: "Traitée", badge: "badge-available" }
+};
+
+function getMediaStatusMeta(status) {
+    return MEDIA_STATUS_META[status] || MEDIA_STATUS_META.new;
+}
+
+function showMediaRequestDetails(m, clientLabel) {
+    const overlay = ensureReservationDetailsModal();
+    document.getElementById("reservationDetailsTitle").textContent = "Détails de la demande Media";
+    const meta = getMediaStatusMeta(m.status);
+
+    document.getElementById("reservationDetailsBody").innerHTML =
+        (clientLabel ? '<div class="summary-row"><span>Client</span><span>' + clientLabel + '</span></div>' : '') +
+        '<div class="summary-row"><span>Projet</span><span>' + m.projectName + '</span></div>' +
+        '<div class="summary-row"><span>Type</span><span>' + (m.projectType || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Date</span><span>' + (m.date || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Durée</span><span>' + (m.duration || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Véhicules souhaités</span><span>' + (m.vehicleCount || '—') + ' — ' + (m.vehicleTypes || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Lieu</span><span>' + (m.location || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Livraison souhaitée</span><span>' + (m.needsDelivery ? 'Oui' : 'Non') + '</span></div>' +
+        '<div class="summary-row"><span>Chauffeur souhaité</span><span>' + (m.needsDriver ? 'Oui' : 'Non') + '</span></div>' +
+        '<div class="summary-row"><span>Budget</span><span>' + (m.budget ? Number(m.budget).toLocaleString("fr-FR") + " $" : '—') + '</span></div>' +
+        '<div class="summary-row" style="flex-direction:column; align-items:flex-start; gap:4px;"><span>Description</span><span class="text-silver" style="font-size:12px;">' + (m.description || '—') + '</span></div>' +
+        '<div class="summary-row"><span>Statut</span><span><span class="badge ' + meta.badge + '">' + meta.label + '</span></span></div>' +
+        '<div class="summary-row"><span>Envoyée le</span><span>' + isoToLocalDateKey(m.createdAt) + '</span></div>';
 
     overlay.classList.add("open");
 }
@@ -683,6 +718,7 @@ async function setBusinessRequestStatus(id, status) {
 function mapMediaRequestRow(row) {
     return {
         id: row.id,
+        userId: row.user_id,
         projectName: row.project_name,
         projectType: row.project_type,
         date: row.event_date,
@@ -701,6 +737,7 @@ function mapMediaRequestRow(row) {
 
 async function submitMediaRequest(data) {
     const { error } = await supabaseClient.from("media_requests").insert({
+        user_id: data.userId,
         project_name: data.projectName,
         project_type: data.projectType,
         event_date: data.date || null,
@@ -714,6 +751,20 @@ async function submitMediaRequest(data) {
         description: data.description || ""
     });
     return { ok: !error, error: error ? error.message : null };
+}
+
+async function getMediaRequestsForUser(userId) {
+    const { data, error } = await supabaseClient.from("media_requests").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    if (error) {
+        console.error("getMediaRequestsForUser:", error);
+        return [];
+    }
+    return data.map(mapMediaRequestRow);
+}
+
+async function setMediaRequestStatus(id, status) {
+    const { error } = await supabaseClient.from("media_requests").update({ status: status }).eq("id", id);
+    if (error) console.error("setMediaRequestStatus:", error);
 }
 
 async function getMediaRequests() {
@@ -843,7 +894,8 @@ const ADMIN_NAV_LINKS = [
             { href: "calendrier.html", label: "Calendrier", capability: "reservations" },
             { href: "clients.html", label: "Clients", capability: "clients" },
             { href: "abonnements.html", label: "Abonnements", capability: "abonnements" },
-            { href: "entreprises.html", label: "Entreprise", capability: "entreprises" }
+            { href: "entreprises.html", label: "Entreprise", capability: "entreprises" },
+            { href: "medias.html", label: "Demandes Media", capability: "medias" }
         ]
     },
     {

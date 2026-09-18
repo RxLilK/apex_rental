@@ -247,6 +247,7 @@ create table public.business_requests (
 
 create table public.media_requests (
   id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.profiles(id),
   project_name text not null,
   project_type text,
   event_date date,
@@ -408,8 +409,8 @@ create policy "staff gere client_grades" on public.client_grades for all using (
 create policy "creer demande business" on public.business_requests for insert with check (true);
 create policy "staff lit et gere business_requests" on public.business_requests for select using (public.is_staff());
 create policy "staff modifie business_requests" on public.business_requests for update using (public.is_staff());
-create policy "creer demande media" on public.media_requests for insert with check (true);
-create policy "staff lit media_requests" on public.media_requests for select using (public.is_staff());
+create policy "creer sa demande media" on public.media_requests for insert with check (user_id = auth.uid());
+create policy "voir sa demande media ou staff" on public.media_requests for select using (user_id = auth.uid() or public.is_staff());
 create policy "staff modifie media_requests" on public.media_requests for update using (public.is_staff());
 
 -- ============================================================

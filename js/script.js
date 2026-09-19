@@ -887,6 +887,20 @@ function getAccountingCategoryLabel(code) {
     return cat ? cat.label : code;
 }
 
+/* Taux d'imposition (% du CA) — réglage unique, modifiable par le
+   Directeur (grade 10) / admin, lisible par tout le staff. */
+async function getTaxRate() {
+    const { data, error } = await supabaseClient.from("finance_settings").select("tax_rate").eq("id", 1).maybeSingle();
+    if (error || !data) return 0;
+    return Number(data.tax_rate);
+}
+
+async function setTaxRate(rate) {
+    const { error } = await supabaseClient.from("finance_settings").upsert({ id: 1, tax_rate: rate });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+}
+
 /* ============================================================
    1septies. SIDEBAR ADMIN COMMUNE
    ============================================================ */

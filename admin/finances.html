@@ -20,10 +20,8 @@
         <h1 class="section-title">Finances</h1>
         <p class="section-subtitle">Chiffre d'affaires calculé à partir des réservations enregistrées.</p>
 
-        <div class="grid grid-4 mt-3">
+        <div class="grid grid-2 mt-3">
             <div class="dashboard-card"><div class="stat-label">CA du jour</div><div class="stat-value" id="caDay" style="font-size:22px;">0 $</div></div>
-            <div class="dashboard-card"><div class="stat-label">CA de la semaine</div><div class="stat-value red" id="caWeek" style="font-size:22px;">0 $</div></div>
-            <div class="dashboard-card"><div class="stat-label">CA du mois</div><div class="stat-value green" id="caMonth" style="font-size:22px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Cautions engagées</div><div class="stat-value orange" id="caDeposits" style="font-size:22px;">0 $</div></div>
         </div>
 
@@ -33,6 +31,20 @@
         </div>
 
         <div class="dashboard-card mt-3"><div class="stat-label">Revenu réparations (incidents facturés)</div><div class="stat-value orange" id="revRepairs" style="font-size:20px;">0 $</div></div>
+
+        <h2 class="section-title mt-4" style="font-size:20px;">Aperçu de la semaine</h2>
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;" class="mt-2">
+            <button type="button" class="btn btn-outline btn-sm" id="prevWeekBtn">← Précédente</button>
+            <span id="weekLabel" class="text-silver" style="font-family:var(--font-heading); font-size:15px;"></span>
+            <button type="button" class="btn btn-outline btn-sm" id="nextWeekBtn">Suivante →</button>
+        </div>
+
+        <div class="grid grid-4 mt-3">
+            <div class="dashboard-card"><div class="stat-label">CA de la semaine</div><div class="stat-value red" id="caWeek" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Charges comptables (semaine)</div><div class="stat-value orange" id="chargesWeek" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Impôts dus (semaine)</div><div class="stat-value orange" id="taxWeek" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Bénéfice net (semaine)</div><div class="stat-value green" id="netWeek" style="font-size:20px;">0 $</div></div>
+        </div>
 
         <h2 class="section-title mt-4" style="font-size:18px;">Réparations facturées</h2>
         <div class="table-wrap mt-2">
@@ -47,9 +59,18 @@
         <h2 class="section-title" style="font-size:20px;">Comptabilité</h2>
         <p class="section-subtitle">Paie employé, primes, impôts et autres charges — déduits automatiquement du bénéfice net.</p>
 
-        <div class="grid grid-2 mt-3">
-            <div class="dashboard-card"><div class="stat-label">Total charges comptables</div><div class="stat-value orange" id="totalCharges" style="font-size:22px;">0 $</div></div>
-            <div class="dashboard-card"><div class="stat-label">Bénéfice net (CA - charges)</div><div class="stat-value green" id="netProfit" style="font-size:22px;">0 $</div></div>
+        <div class="card mt-3" style="max-width:560px;" id="taxCard">
+            <h3 style="font-size:14px; color:var(--apex-white);">Taux d'imposition</h3>
+            <p class="text-silver mt-1" style="font-size:12px;">Pourcentage appliqué automatiquement sur le CA de chaque semaine. Réservé au Directeur et à l'admin.</p>
+
+            <form id="taxForm" class="mt-3" style="display:flex; gap:8px; align-items:flex-end;">
+                <div class="form-group" style="flex:1; margin-bottom:0;">
+                    <label for="taxRateField">Taux d'imposition (%)</label>
+                    <input type="number" id="taxRateField" min="0" max="100" step="0.1">
+                </div>
+                <button type="submit" class="btn btn-outline btn-sm">Enregistrer</button>
+            </form>
+            <span class="text-silver saved-msg hidden mt-2" style="font-size:12px; display:block;">✓ Enregistré</span>
         </div>
 
         <div class="card mt-3" style="max-width:640px;" id="accountingFormCard">
@@ -110,13 +131,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
     const canEdit = userHasPermission(user, "finances", "edit");
+    const canManageTax = isDirectorOrAdmin(user);
+    if (!canManageTax) {
+        document.getElementById("taxForm").classList.add("hidden");
+        document.querySelector("#taxCard p.text-silver").textContent = "Pourcentage appliqué automatiquement sur le chiffre d'affaires.";
+    }
 
     const reservations = await getAllReservations();
-    const financeEntries = getFinanceEntries();
+    const financeEntries = await getFinanceEntries();
+    const taxRate = await getTaxRate();
+    document.getElementById("taxRateField").value = taxRate * 100;
+
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - startOfDay.getDay());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     function sumSince(date) {
         const fromReservations = reservations
@@ -129,17 +156,76 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     document.getElementById("caDay").textContent = sumSince(startOfDay).toLocaleString("fr-FR") + " $";
-    document.getElementById("caWeek").textContent = sumSince(startOfWeek).toLocaleString("fr-FR") + " $";
-    document.getElementById("caMonth").textContent = sumSince(startOfMonth).toLocaleString("fr-FR") + " $";
     document.getElementById("caDeposits").textContent = reservations.reduce(function (sum, r) { return sum + (r.deposit || 0); }, 0).toLocaleString("fr-FR") + " $";
     document.getElementById("revRental").textContent = reservations.reduce(function (sum, r) { return sum + (r.rentalPrice || 0); }, 0).toLocaleString("fr-FR") + " $";
     document.getElementById("revExtras").textContent = reservations.reduce(function (sum, r) { return sum + (r.insurancePrice || 0) + (r.deliveryPrice || 0); }, 0).toLocaleString("fr-FR") + " $";
     document.getElementById("revRepairs").textContent = financeEntries.reduce(function (sum, e) { return sum + e.amount; }, 0).toLocaleString("fr-FR") + " $";
 
+    document.getElementById("taxForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        const rate = (parseFloat(document.getElementById("taxRateField").value) || 0) / 100;
+        const result = await setTaxRate(rate);
+        const msg = document.querySelector("#taxCard .saved-msg");
+        if (!result.ok) {
+            alert("Erreur : " + result.error);
+            return;
+        }
+        msg.classList.remove("hidden");
+        setTimeout(function () { msg.classList.add("hidden"); }, 2000);
+    });
+
     const repairRows = financeEntries.slice().sort(function (a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).map(function (e) {
         return '<tr><td>' + e.label + '</td><td>' + e.amount.toLocaleString("fr-FR") + ' $</td><td>' + isoToLocalDateKey(e.createdAt) + '</td></tr>';
     }).join("");
     document.getElementById("repairsBody").innerHTML = repairRows || '<tr><td colspan="3" class="text-silver">Aucune réparation facturée.</td></tr>';
+
+    // ---- APERÇU HEBDOMADAIRE (naviguable) ----
+    let currentMonday = getWeekMonday(new Date());
+    let allAccountingEntries = [];
+
+    async function renderWeekStats() {
+        document.getElementById("weekLabel").textContent = formatWeekLabel(toLocalDateKey(currentMonday));
+
+        const weekStart = new Date(currentMonday);
+        const weekEnd = new Date(currentMonday);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+
+        const weekReservations = reservations.filter(function (r) {
+            const d = new Date(r.createdAt);
+            return d >= weekStart && d < weekEnd;
+        });
+        const weekFinanceEntries = financeEntries.filter(function (e) {
+            const d = new Date(e.createdAt);
+            return d >= weekStart && d < weekEnd;
+        });
+        const weekAccountingEntries = allAccountingEntries.filter(function (e) {
+            const weekStartKey = toLocalDateKey(weekStart);
+            const lastDay = new Date(weekEnd);
+            lastDay.setDate(lastDay.getDate() - 1);
+            const weekEndKey = toLocalDateKey(lastDay);
+            return e.date >= weekStartKey && e.date <= weekEndKey;
+        });
+
+        const caWeek = weekReservations.reduce(function (sum, r) { return sum + r.total; }, 0) +
+            weekFinanceEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+        const chargesWeek = weekAccountingEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+        const taxWeek = Math.round(caWeek * taxRate);
+        const netWeek = caWeek - chargesWeek - taxWeek;
+
+        document.getElementById("caWeek").textContent = caWeek.toLocaleString("fr-FR") + " $";
+        document.getElementById("chargesWeek").textContent = chargesWeek.toLocaleString("fr-FR") + " $";
+        document.getElementById("taxWeek").textContent = taxWeek.toLocaleString("fr-FR") + " $";
+        document.getElementById("netWeek").textContent = netWeek.toLocaleString("fr-FR") + " $";
+    }
+
+    document.getElementById("prevWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() - 7);
+        renderWeekStats();
+    });
+    document.getElementById("nextWeekBtn").addEventListener("click", function () {
+        currentMonday.setDate(currentMonday.getDate() + 7);
+        renderWeekStats();
+    });
 
     // ---- COMPTABILITÉ ----
     if (!canEdit) document.getElementById("accountingFormCard").style.display = "none";
@@ -153,7 +239,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
     const accEmployee = document.getElementById("accEmployee");
-    getEmployeeUsers().forEach(function (e) {
+    (await getEmployeeUsers()).forEach(function (e) {
         const opt = document.createElement("option");
         opt.value = e.id;
         opt.textContent = e.firstName + " " + e.lastName;
@@ -162,15 +248,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     document.getElementById("accDate").value = todayLocalKey();
 
-    function renderAccounting() {
-        const entries = getAccountingEntries();
-        const totalCharges = entries.reduce(function (sum, e) { return sum + e.amount; }, 0);
-        const totalRevenue = reservations.reduce(function (sum, r) { return sum + r.total; }, 0) + financeEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+    async function renderAccounting() {
+        allAccountingEntries = await getAccountingEntries();
+        await renderWeekStats();
 
-        document.getElementById("totalCharges").textContent = totalCharges.toLocaleString("fr-FR") + " $";
-        document.getElementById("netProfit").textContent = (totalRevenue - totalCharges).toLocaleString("fr-FR") + " $";
-
-        const sorted = entries.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+        const sorted = allAccountingEntries.slice().sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
         document.getElementById("accountingBody").innerHTML = sorted.length
             ? sorted.map(function (e) {
                 return (
@@ -187,17 +269,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             : '<tr><td colspan="6" class="text-silver">Aucune écriture comptable pour le moment.</td></tr>';
 
         document.querySelectorAll(".removeAcc").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                removeAccountingEntry(btn.getAttribute("data-id"));
+            btn.addEventListener("click", async function () {
+                await removeAccountingEntry(btn.getAttribute("data-id"));
                 renderAccounting();
             });
         });
     }
 
-    document.getElementById("accountingForm").addEventListener("submit", function (e) {
+    document.getElementById("accountingForm").addEventListener("submit", async function (e) {
         e.preventDefault();
         const employeeOption = accEmployee.options[accEmployee.selectedIndex];
-        addAccountingEntry({
+        await addAccountingEntry({
             category: accCategory.value,
             employeeId: accEmployee.value,
             employeeName: accEmployee.value ? employeeOption.textContent : "",

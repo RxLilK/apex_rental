@@ -10,6 +10,7 @@
 -- (ex: un essai antérieur), on la retire avant de tout recréer.
 -- ⚠️ Ceci efface les données de ces tables si elles existent déjà.
 drop table if exists public.finance_entries cascade;
+drop table if exists public.finance_settings cascade;
 drop table if exists public.accounting_entries cascade;
 drop table if exists public.club_tier_config cascade;
 drop table if exists public.grade_permissions cascade;
@@ -302,6 +303,15 @@ on conflict (tier) do nothing;
 -- ------------------------------------------------------------
 -- 9. COMPTABILITÉ (paie, primes, impôts, charges...)
 -- ------------------------------------------------------------
+create table public.finance_settings (
+  id int primary key default 1,
+  tax_rate numeric not null default 0,
+  updated_at timestamptz not null default now(),
+  constraint finance_settings_singleton check (id = 1)
+);
+
+insert into public.finance_settings (id, tax_rate) values (1, 0);
+
 create table public.accounting_entries (
   id uuid primary key default uuid_generate_v4(),
   category text not null,                  -- paie, prime, impot, charge, achat, autre
@@ -337,6 +347,7 @@ alter table public.grade_permissions enable row level security;
 alter table public.club_tier_config enable row level security;
 alter table public.accounting_entries enable row level security;
 alter table public.finance_entries enable row level security;
+alter table public.finance_settings enable row level security;
 
 create or replace function public.current_role()
 returns text language sql security definer stable as $$
@@ -403,6 +414,9 @@ create policy "staff modifie club_tier_config" on public.club_tier_config for up
 create policy "staff insere club_tier_config" on public.club_tier_config for insert with check (public.is_staff());
 create policy "staff gere accounting" on public.accounting_entries for all using (public.is_staff()) with check (public.is_staff());
 create policy "staff gere finance_entries" on public.finance_entries for all using (public.is_staff()) with check (public.is_staff());
+create policy "staff lit finance_settings" on public.finance_settings for select using (public.is_staff());
+create policy "directeur ou admin modifie finance_settings" on public.finance_settings for update using (public.is_admin_or_director());
+create policy "directeur ou admin insere finance_settings" on public.finance_settings for insert with check (public.is_admin_or_director());
 create policy "staff gere client_grades" on public.client_grades for all using (public.is_staff()) with check (public.is_staff());
 
 -- Demandes Business/Media : n'importe qui peut soumettre, staff gère

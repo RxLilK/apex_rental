@@ -41,10 +41,11 @@
 
         <div class="grid grid-4 mt-3">
             <div class="dashboard-card"><div class="stat-label">CA de la semaine</div><div class="stat-value red" id="caWeek" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Dont abonnements VIP</div><div class="stat-value" id="subWeek" style="font-size:20px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Charges comptables (semaine)</div><div class="stat-value orange" id="chargesWeek" style="font-size:20px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Impôts dus (semaine)</div><div class="stat-value orange" id="taxWeek" style="font-size:20px;">0 $</div></div>
-            <div class="dashboard-card"><div class="stat-label">Bénéfice net (semaine)</div><div class="stat-value green" id="netWeek" style="font-size:20px;">0 $</div></div>
         </div>
+        <div class="dashboard-card mt-3" style="max-width:320px;"><div class="stat-label">Bénéfice net (semaine)</div><div class="stat-value green" id="netWeek" style="font-size:22px;">0 $</div></div>
 
         <h2 class="section-title mt-4" style="font-size:18px;">Réparations facturées</h2>
         <div class="table-wrap mt-2">
@@ -183,6 +184,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     let currentMonday = getWeekMonday(new Date());
     let allAccountingEntries = [];
 
+    const { data: allProfiles } = await supabaseClient.from("profiles").select("club_tier");
+    const clubCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-club"; }).length;
+    const blackCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-black"; }).length;
+    const [clubTierInfo, blackTierInfo] = await Promise.all([getEffectiveClubTierInfo("apex-club"), getEffectiveClubTierInfo("apex-black")]);
+    // Simplification : on suppose que chaque abonné VIP actuel paie son
+    // abonnement chaque semaine (pas d'historique de facturation réel).
+    const subscriptionRevenuePerWeek = (clubCount * clubTierInfo.pricePerWeek) + (blackCount * blackTierInfo.pricePerWeek);
+
     async function renderWeekStats() {
         document.getElementById("weekLabel").textContent = formatWeekLabel(toLocalDateKey(currentMonday));
 
@@ -207,12 +216,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
 
         const caWeek = weekReservations.reduce(function (sum, r) { return sum + r.total; }, 0) +
-            weekFinanceEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
+            weekFinanceEntries.reduce(function (sum, e) { return sum + e.amount; }, 0) +
+            subscriptionRevenuePerWeek;
         const chargesWeek = weekAccountingEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
         const taxWeek = Math.round(caWeek * taxRate);
         const netWeek = caWeek - chargesWeek - taxWeek;
 
         document.getElementById("caWeek").textContent = caWeek.toLocaleString("fr-FR") + " $";
+        document.getElementById("subWeek").textContent = subscriptionRevenuePerWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("chargesWeek").textContent = chargesWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("taxWeek").textContent = taxWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("netWeek").textContent = netWeek.toLocaleString("fr-FR") + " $";

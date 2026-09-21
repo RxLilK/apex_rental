@@ -32,7 +32,7 @@
         <div class="table-wrap mt-3">
             <table class="table">
                 <thead>
-                    <tr><th>Nom</th><th>Entreprise</th><th>Téléphone</th><th>E-mail</th><th>Locations</th><th>Dépenses</th><th>Statut</th><th>Grade client</th></tr>
+                    <tr><th>Nom</th><th>Entreprise</th><th>Téléphone</th><th>E-mail</th><th>Locations</th><th>Dépenses</th><th>Statut</th><th>Grade client</th><th>Réduction perso</th></tr>
                 </thead>
                 <tbody id="clientsBody"></tbody>
             </table>
@@ -50,6 +50,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
     }
     const canEdit = userHasPermission(user, "clients", "edit");
+    const canManageDiscount = isDirectorOrAdmin(user);
     if (!canEdit) document.getElementById("gradeManagementCard").style.display = "none";
 
     const reservations = await getAllReservations();
@@ -130,10 +131,11 @@ document.addEventListener("DOMContentLoaded", async function () {
                     '<td>' + totalSpent.toLocaleString("fr-FR") + ' $</td>' +
                     '<td><select data-id="' + c.id + '" class="statusSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + statusOptions(c.club_tier) + '</select></td>' +
                     '<td><select data-id="' + c.id + '" class="gradeSelect" ' + (canEdit ? '' : 'disabled') + ' style="background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;">' + gradeOptions(c.client_grade) + '</select></td>' +
+                    '<td><input type="number" min="0" max="100" data-id="' + c.id + '" class="discountInput" value="' + (c.custom_discount || 0) + '" ' + (canManageDiscount ? '' : 'disabled') + ' style="width:70px; background:var(--apex-carbon); color:var(--apex-white); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 8px; font-size:12px;"> %</td>' +
                     '</tr>'
                 );
             }).join("")
-            : '<tr><td colspan="8" class="text-silver">Aucun client enregistré.</td></tr>';
+            : '<tr><td colspan="9" class="text-silver">Aucun client enregistré.</td></tr>';
 
         document.querySelectorAll(".statusSelect").forEach(function (select) {
             const previousValue = select.value;
@@ -148,6 +150,16 @@ document.addEventListener("DOMContentLoaded", async function () {
         document.querySelectorAll(".gradeSelect").forEach(function (select) {
             select.addEventListener("change", function () {
                 setUserClientGrade(select.getAttribute("data-id"), select.value);
+            });
+        });
+        document.querySelectorAll(".discountInput").forEach(function (input) {
+            const previousValue = input.value;
+            input.addEventListener("change", async function () {
+                const result = await setUserCustomDiscount(input.getAttribute("data-id"), parseFloat(input.value) || 0);
+                if (!result.ok) {
+                    alert("Erreur : " + result.error);
+                    input.value = previousValue;
+                }
             });
         });
     }

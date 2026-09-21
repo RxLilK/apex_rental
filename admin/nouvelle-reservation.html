@@ -143,12 +143,13 @@ document.addEventListener("DOMContentLoaded", async function () {
         return Math.max(1, Math.round((end - start) / 3600000));
     }
 
-    function pickRentalPrice(vehicle, hours) {
+    function pickRentalPrice(vehicle, hours, customDiscount) {
         let base, label;
         if (hours >= 168) { base = vehicle.price7d; label = "7 jours"; }
         else if (hours >= 24) { base = vehicle.price24h; label = "24 heures"; }
         else { base = vehicle.price4h; label = "4 heures"; }
-        const discounted = Math.round(base * (1 - tierInfo.rentalDiscount));
+        const afterTier = base * (1 - tierInfo.rentalDiscount);
+        const discounted = Math.round(afterTier * (1 - (customDiscount || 0) / 100));
         return { price: discounted, basePrice: base, label: label };
     }
 
@@ -208,8 +209,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     function computeTotals() {
         const vehicle = findVehicle(vehicleSelect.value);
+        const client = findClient(clientSelect.value);
         const hours = getDurationHours();
-        const rental = pickRentalPrice(vehicle, hours);
+        const rental = pickRentalPrice(vehicle, hours, client ? client.custom_discount : 0);
         const insuranceLevel = INSURANCE_LEVELS.find(function (i) { return i.code === state.insurance; });
         const insurancePrice = tierInfo.freeInsurance ? 0 : insuranceLevel.price;
         const insurance = Object.assign({}, insuranceLevel, { price: insurancePrice, originalPrice: insuranceLevel.price });
@@ -262,7 +264,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             rentalPrice: t.rental.price,
             rentalBasePrice: t.rental.basePrice,
             appliedClubTier: client.club_tier !== "none" ? client.club_tier : "",
-            rentalDiscountPercent: tierInfo.rentalDiscount * 100,
+            rentalDiscountPercent: Math.round((1 - (1 - tierInfo.rentalDiscount) * (1 - (client.custom_discount || 0) / 100)) * 100),
             deliverySavings: t.delivery.originalPrice > 0 ? t.delivery.originalPrice - t.delivery.price : 0,
             insuranceSavings: t.insurance.originalPrice > 0 ? t.insurance.originalPrice - t.insurance.price : 0,
             total: t.total,

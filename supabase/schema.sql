@@ -45,6 +45,7 @@ create table public.profiles (
   role text not null default 'client' check (role in ('client', 'employee', 'admin')),
   grade_code text,                         -- grade employé (director, trainee, etc.)
   club_tier text not null default 'none' check (club_tier in ('none', 'apex-club', 'apex-black', 'entreprise')),
+  custom_discount numeric not null default 0 check (custom_discount >= 0 and custom_discount <= 100),
   client_grade text default '',            -- grade client libre (options futures)
   business_name text default '',           -- si compte entreprise
   created_at timestamptz not null default now()

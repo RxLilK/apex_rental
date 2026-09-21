@@ -633,6 +633,19 @@ async function setUserClubTier(userId, tier) {
     return { ok: true };
 }
 
+/* Réduction individuelle (0 à 100%), en plus de la réduction liée à
+   l'abonnement — réservée à l'admin/Directeur côté interface, protégée
+   par la même policy RLS que le reste du profil. */
+async function setUserCustomDiscount(userId, percent) {
+    const clamped = Math.max(0, Math.min(100, percent));
+    const { error } = await supabaseClient.from("profiles").update({ custom_discount: clamped }).eq("id", userId);
+    if (error) {
+        console.error("setUserCustomDiscount:", error);
+        return { ok: false, error: error.message };
+    }
+    return { ok: true };
+}
+
 /* ============================================================
    1sexies-bis. GRADES CLIENTS (pour options futures)
    ============================================================ */
@@ -1403,6 +1416,7 @@ function mapProfileToUser(authUser, profile) {
         role: profile.role,
         gradeCode: profile.grade_code,
         clubTier: profile.club_tier,
+        customDiscount: Number(profile.custom_discount || 0),
         clientGrade: profile.client_grade,
         businessName: profile.business_name
     };

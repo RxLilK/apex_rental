@@ -91,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     document.getElementById("dashboardContent").innerHTML =
         '<h1 class="section-title">Bonjour, ' + user.firstName + (user.businessName ? ' <span class="text-silver" style="font-size:16px;">(' + user.businessName + ')</span>' : '') + '</h1>' +
 
-        '<div class="grid grid-3 mt-3">' +
+        '<div class="grid grid-4 mt-3">' +
         '  <div class="dashboard-card">' +
         '    <div class="stat-label">Réservations</div>' +
         '    <div class="stat-value red">' + reservations.length + '</div>' +
@@ -103,6 +103,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         '  <div class="dashboard-card">' +
         '    <div class="stat-label">Abonnement</div>' +
         '    <div class="stat-value orange" style="font-size:20px;">' + tierInfo.label + '</div>' +
+        '  </div>' +
+        '  <div class="dashboard-card">' +
+        '    <div class="stat-label">Réduction personnelle</div>' +
+        '    <div class="stat-value" style="font-size:20px;">' + (user.customDiscount || 0) + '%</div>' +
         '  </div>' +
         '</div>' +
 

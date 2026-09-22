@@ -39,13 +39,15 @@
             <button type="button" class="btn btn-outline btn-sm" id="nextWeekBtn">Suivante →</button>
         </div>
 
-        <div class="grid grid-4 mt-3">
+        <div class="grid grid-5 mt-3">
             <div class="dashboard-card"><div class="stat-label">CA de la semaine</div><div class="stat-value red" id="caWeek" style="font-size:20px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Dont abonnements VIP</div><div class="stat-value" id="subWeek" style="font-size:20px;">0 $</div></div>
+            <div class="dashboard-card"><div class="stat-label">Réductions accordées</div><div class="stat-value" id="discountWeek" style="font-size:20px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Charges comptables (semaine)</div><div class="stat-value orange" id="chargesWeek" style="font-size:20px;">0 $</div></div>
             <div class="dashboard-card"><div class="stat-label">Impôts dus (semaine)</div><div class="stat-value orange" id="taxWeek" style="font-size:20px;">0 $</div></div>
         </div>
         <div class="dashboard-card mt-3" style="max-width:320px;"><div class="stat-label">Bénéfice net (semaine)</div><div class="stat-value green" id="netWeek" style="font-size:22px;">0 $</div></div>
+        <button type="button" class="btn btn-outline btn-sm mt-3" id="viewWeekDetailsBtn">Voir le détail de la semaine</button>
 
         <h2 class="section-title mt-4" style="font-size:18px;">Réparations facturées</h2>
         <div class="table-wrap mt-2">
@@ -183,14 +185,22 @@ document.addEventListener("DOMContentLoaded", async function () {
     // ---- APERÇU HEBDOMADAIRE (naviguable) ----
     let currentMonday = getWeekMonday(new Date());
     let allAccountingEntries = [];
+    let lastWeekData = null;
 
-    const { data: allProfiles } = await supabaseClient.from("profiles").select("club_tier");
+    const { data: allProfiles } = await supabaseClient.from("profiles").select("id, club_tier, first_name, last_name, business_name");
     const clubCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-club"; }).length;
     const blackCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-black"; }).length;
     const [clubTierInfo, blackTierInfo] = await Promise.all([getEffectiveClubTierInfo("apex-club"), getEffectiveClubTierInfo("apex-black")]);
     // Simplification : on suppose que chaque abonné VIP actuel paie son
     // abonnement chaque semaine (pas d'historique de facturation réel).
     const subscriptionRevenuePerWeek = (clubCount * clubTierInfo.pricePerWeek) + (blackCount * blackTierInfo.pricePerWeek);
+
+    function clientName(userId) {
+        const p = (allProfiles || []).find(function (x) { return x.id === userId; });
+        if (!p) return "—";
+        const full = ((p.first_name || "") + " " + (p.last_name || "")).trim();
+        return p.business_name ? p.business_name + " (" + full + ")" : full;
+    }
 
     async function renderWeekStats() {
         document.getElementById("weekLabel").textContent = formatWeekLabel(toLocalDateKey(currentMonday));
@@ -218,16 +228,66 @@ document.addEventListener("DOMContentLoaded", async function () {
         const caWeek = weekReservations.reduce(function (sum, r) { return sum + r.total; }, 0) +
             weekFinanceEntries.reduce(function (sum, e) { return sum + e.amount; }, 0) +
             subscriptionRevenuePerWeek;
+        const discountWeek = weekReservations.reduce(function (sum, r) {
+            return sum + Math.max(0, (r.rentalBasePrice || r.rentalPrice) - r.rentalPrice);
+        }, 0);
         const chargesWeek = weekAccountingEntries.reduce(function (sum, e) { return sum + e.amount; }, 0);
         const taxWeek = Math.round(caWeek * taxRate);
         const netWeek = caWeek - chargesWeek - taxWeek;
 
         document.getElementById("caWeek").textContent = caWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("subWeek").textContent = subscriptionRevenuePerWeek.toLocaleString("fr-FR") + " $";
+        document.getElementById("discountWeek").textContent = discountWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("chargesWeek").textContent = chargesWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("taxWeek").textContent = taxWeek.toLocaleString("fr-FR") + " $";
         document.getElementById("netWeek").textContent = netWeek.toLocaleString("fr-FR") + " $";
+
+        lastWeekData = {
+            reservations: weekReservations,
+            financeEntries: weekFinanceEntries,
+            accountingEntries: weekAccountingEntries,
+            caWeek: caWeek, discountWeek: discountWeek, chargesWeek: chargesWeek, taxWeek: taxWeek, netWeek: netWeek
+        };
     }
+
+    document.getElementById("viewWeekDetailsBtn").addEventListener("click", function () {
+        if (!lastWeekData) return;
+        const overlay = ensureReservationDetailsModal();
+        document.getElementById("reservationDetailsTitle").textContent = "Détail — " + formatWeekLabel(toLocalDateKey(currentMonday));
+
+        const resRows = lastWeekData.reservations.length
+            ? lastWeekData.reservations.map(function (r) {
+                return '<div class="summary-row"><span>' + r.reference + ' — ' + r.vehicleName + ' (' + clientName(r.userId) + ')</span><span>' + r.total.toLocaleString("fr-FR") + ' $</span></div>';
+            }).join("")
+            : '<p class="text-silver" style="font-size:12px;">Aucune réservation cette semaine.</p>';
+
+        const repairRows = lastWeekData.financeEntries.length
+            ? lastWeekData.financeEntries.map(function (e) {
+                return '<div class="summary-row"><span>' + e.label + '</span><span>' + e.amount.toLocaleString("fr-FR") + ' $</span></div>';
+            }).join("")
+            : '<p class="text-silver" style="font-size:12px;">Aucune réparation facturée cette semaine.</p>';
+
+        const chargeRows = lastWeekData.accountingEntries.length
+            ? lastWeekData.accountingEntries.map(function (e) {
+                return '<div class="summary-row"><span>' + getAccountingCategoryLabel(e.category) + ' — ' + e.label + (e.employeeName ? ' (' + e.employeeName + ')' : '') + '</span><span>' + e.amount.toLocaleString("fr-FR") + ' $</span></div>';
+            }).join("")
+            : '<p class="text-silver" style="font-size:12px;">Aucune charge comptable cette semaine.</p>';
+
+        document.getElementById("reservationDetailsBody").innerHTML =
+            '<h3 style="font-size:13px; color:var(--apex-white);">Réservations</h3>' + resRows +
+            '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Réparations facturées</h3>' + repairRows +
+            '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Charges comptables</h3>' + chargeRows +
+            '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Abonnements VIP</h3>' +
+            '<div class="summary-row"><span>' + clubCount + ' × Apex Club</span><span>' + (clubCount * clubTierInfo.pricePerWeek).toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>' + blackCount + ' × Apex Black</span><span>' + (blackCount * blackTierInfo.pricePerWeek).toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row total mt-2"><span>CA de la semaine</span><span class="value">' + lastWeekData.caWeek.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>Réductions accordées</span><span>' + lastWeekData.discountWeek.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>Impôts (' + (taxRate * 100) + '%)</span><span>-' + lastWeekData.taxWeek.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>Charges</span><span>-' + lastWeekData.chargesWeek.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row total"><span>Bénéfice net</span><span class="value">' + lastWeekData.netWeek.toLocaleString("fr-FR") + ' $</span></div>';
+
+        overlay.classList.add("open");
+    });
 
     document.getElementById("prevWeekBtn").addEventListener("click", function () {
         currentMonday.setDate(currentMonday.getDate() - 7);

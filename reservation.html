@@ -196,8 +196,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (hours >= 168) { base = vehicle.price7d; label = "7 jours"; }
         else if (hours >= 24) { base = vehicle.price24h; label = "24 heures"; }
         else { base = vehicle.price4h; label = "4 heures"; }
-        const afterTier = base * (1 - tierInfo.rentalDiscount);
-        const discounted = Math.round(afterTier * (1 - (user.customDiscount || 0) / 100));
+        const discounted = Math.round(base * (1 - tierInfo.rentalDiscount));
         return { price: discounted, basePrice: base, label: label };
     }
 
@@ -343,7 +342,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             rentalPrice: t.rental.price,
             rentalBasePrice: t.rental.basePrice,
             appliedClubTier: user.clubTier !== "none" ? user.clubTier : "",
-            rentalDiscountPercent: Math.round((1 - (1 - tierInfo.rentalDiscount) * (1 - (user.customDiscount || 0) / 100)) * 100),
+            rentalDiscountPercent: tierInfo.rentalDiscount * 100,
             deliverySavings: t.delivery.originalPrice > 0 ? t.delivery.originalPrice - t.delivery.price : 0,
             insuranceSavings: t.insurance.originalPrice > 0 ? t.insurance.originalPrice - t.insurance.price : 0,
             total: t.total,

@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     await initSupabaseSession();
     const currentClient = getCurrentUser();
     const eligibleTiers = ["apex-club", "apex-black"];
-    const canReserve = currentClient && eligibleTiers.indexOf(currentClient.clubTier) !== -1;
+    const hasVipAccess = currentClient && eligibleTiers.indexOf(currentClient.clubTier) !== -1;
 
     const params = new URLSearchParams(window.location.search);
     const id = params.get("id");
@@ -52,6 +52,10 @@ document.addEventListener("DOMContentLoaded", async function () {
             '<a href="vehicules.html" class="btn btn-outline mt-3">Retour au catalogue</a>';
         return;
     }
+
+    // Les véhicules Prestige sont réservés aux membres Apex Black.
+    const isPrestigeBlockedForClub = vehicle.category === "PRESTIGE" && currentClient && currentClient.clubTier === "apex-club";
+    const canReserve = hasVipAccess && !isPrestigeBlockedForClub;
 
     document.title = vehicle.name + " — APEX RENTAL";
 
@@ -109,8 +113,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         '    ' + (canReserve
             ? '<a href="reservation.html?id=' + vehicle.id + '" class="btn btn-primary btn-block mt-3">Réserver ce véhicule</a>'
-            : '<button type="button" disabled class="btn btn-block mt-3" style="background:rgba(255,255,255,0.06); color:rgba(184,188,194,0.5); cursor:not-allowed; border:1px solid rgba(255,255,255,0.08);">Réservé Apex Club &amp; Apex Black</button>' +
-              '<a href="club.html" class="btn btn-outline btn-block mt-2">Découvrir Apex Club</a>') +
+            : (isPrestigeBlockedForClub
+                ? '<button type="button" disabled class="btn btn-block mt-3" style="background:rgba(255,255,255,0.06); color:rgba(184,188,194,0.5); cursor:not-allowed; border:1px solid rgba(255,255,255,0.08);">Réservé Apex Black</button>' +
+                  '<a href="club.html" class="btn btn-outline btn-block mt-2">Découvrir Apex Black</a>'
+                : '<button type="button" disabled class="btn btn-block mt-3" style="background:rgba(255,255,255,0.06); color:rgba(184,188,194,0.5); cursor:not-allowed; border:1px solid rgba(255,255,255,0.08);">Réservé Apex Club &amp; Apex Black</button>' +
+              '<a href="club.html" class="btn btn-outline btn-block mt-2">Découvrir Apex Club</a>')) +
         '  </div>' +
         '</div>' +
 

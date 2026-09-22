@@ -144,10 +144,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     let currentStep = 1;
     const totalSteps = 6;
-    const allVehicles = await getAllVehicles();
+    const allVehiclesRaw = await getAllVehicles();
+    // Les véhicules Prestige sont réservés aux membres Apex Black.
+    const allVehicles = user.clubTier === "apex-club"
+        ? allVehiclesRaw.filter(function (v) { return v.category !== "PRESTIGE"; })
+        : allVehiclesRaw;
     function findVehicle(id) { return allVehicles.find(function (v) { return v.id === id; }); }
 
-    const state = { vehicleId: preselectId || allVehicles[0].id, insurance: "basic", delivery: "agence" };
+    const preselectedVehicle = findVehicle(preselectId);
+    const state = { vehicleId: preselectedVehicle ? preselectId : allVehicles[0].id, insurance: "basic", delivery: "agence" };
 
     const stepVehicle = document.getElementById("stepVehicle");
     allVehicles.forEach(function (v) {

@@ -400,6 +400,10 @@ create policy "creer sa reservation" on public.reservations for insert
         select 1 from public.profiles
         where id = auth.uid() and club_tier in ('apex-club', 'apex-black')
       )
+      and not (
+        exists (select 1 from public.profiles where id = auth.uid() and club_tier = 'apex-club')
+        and exists (select 1 from public.vehicles where id = vehicle_id and category = 'PRESTIGE')
+      )
     )
   );
 create policy "staff modifie reservations" on public.reservations for update

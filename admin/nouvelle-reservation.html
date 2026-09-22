@@ -108,12 +108,26 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
     const vehicleSelect = document.getElementById("vehicleSelect");
-    allVehicles.forEach(function (v) {
-        const opt = document.createElement("option");
-        opt.value = v.id;
-        opt.textContent = v.name + " — " + getCategoryLabel(v.category);
-        vehicleSelect.appendChild(opt);
-    });
+    function populateVehicleSelect(tier) {
+        const previousValue = vehicleSelect.value;
+        // Les véhicules Prestige sont réservés aux membres Apex Black.
+        const selectableVehicles = tier === "apex-club"
+            ? allVehicles.filter(function (v) { return v.category !== "PRESTIGE"; })
+            : allVehicles;
+
+        vehicleSelect.innerHTML = "";
+        selectableVehicles.forEach(function (v) {
+            const opt = document.createElement("option");
+            opt.value = v.id;
+            opt.textContent = v.name + " — " + getCategoryLabel(v.category);
+            vehicleSelect.appendChild(opt);
+        });
+
+        if (selectableVehicles.some(function (v) { return v.id === previousValue; })) {
+            vehicleSelect.value = previousValue;
+        }
+    }
+    populateVehicleSelect("none");
 
     function findVehicle(id) { return allVehicles.find(function (v) { return v.id === id; }); }
     function findClient(id) { return clients.find(function (c) { return c.id === id; }); }
@@ -128,9 +142,10 @@ document.addEventListener("DOMContentLoaded", async function () {
     async function refreshTierInfo() {
         const client = findClient(clientSelect.value);
         const tier = (client && client.club_tier) || "none";
+        populateVehicleSelect(tier);
         tierInfo = await getEffectiveClubTierInfo(tier);
         document.getElementById("clientTierNote").textContent = tier !== "none"
-            ? "Abonnement : " + tierInfo.label + " — avantages appliqués automatiquement ci-dessous."
+            ? "Abonnement : " + tierInfo.label + " — avantages appliqués automatiquement ci-dessous." + (tier === "apex-club" ? " Véhicules Prestige non disponibles (réservés Apex Black)." : "")
             : "Client standard — aucun avantage VIP.";
         renderInsuranceOptions();
         renderDeliveryOptions();

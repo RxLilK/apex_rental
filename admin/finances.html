@@ -187,13 +187,21 @@ document.addEventListener("DOMContentLoaded", async function () {
     let allAccountingEntries = [];
     let lastWeekData = null;
 
-    const { data: allProfiles } = await supabaseClient.from("profiles").select("id, club_tier, first_name, last_name, business_name");
-    const clubCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-club"; }).length;
-    const blackCount = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-black"; }).length;
+    const { data: allProfiles } = await supabaseClient.from("profiles").select("id, club_tier, custom_discount, first_name, last_name, business_name");
+    const clubClients = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-club"; });
+    const blackClients = (allProfiles || []).filter(function (p) { return p.club_tier === "apex-black"; });
+    const clubCount = clubClients.length;
+    const blackCount = blackClients.length;
     const [clubTierInfo, blackTierInfo] = await Promise.all([getEffectiveClubTierInfo("apex-club"), getEffectiveClubTierInfo("apex-black")]);
     // Simplification : on suppose que chaque abonné VIP actuel paie son
-    // abonnement chaque semaine (pas d'historique de facturation réel).
-    const subscriptionRevenuePerWeek = (clubCount * clubTierInfo.pricePerWeek) + (blackCount * blackTierInfo.pricePerWeek);
+    // abonnement chaque semaine (pas d'historique de facturation réel) —
+    // en tenant compte de la réduction personnelle de chacun.
+    function subscriptionRevenueFor(clients, pricePerWeek) {
+        return clients.reduce(function (sum, p) { return sum + pricePerWeek * (1 - (p.custom_discount || 0) / 100); }, 0);
+    }
+    const clubRevenue = Math.round(subscriptionRevenueFor(clubClients, clubTierInfo.pricePerWeek));
+    const blackRevenue = Math.round(subscriptionRevenueFor(blackClients, blackTierInfo.pricePerWeek));
+    const subscriptionRevenuePerWeek = clubRevenue + blackRevenue;
 
     function clientName(userId) {
         const p = (allProfiles || []).find(function (x) { return x.id === userId; });
@@ -278,8 +286,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Réparations facturées</h3>' + repairRows +
             '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Charges comptables</h3>' + chargeRows +
             '<h3 style="font-size:13px; color:var(--apex-white); margin-top:16px;">Abonnements VIP</h3>' +
-            '<div class="summary-row"><span>' + clubCount + ' × Apex Club</span><span>' + (clubCount * clubTierInfo.pricePerWeek).toLocaleString("fr-FR") + ' $</span></div>' +
-            '<div class="summary-row"><span>' + blackCount + ' × Apex Black</span><span>' + (blackCount * blackTierInfo.pricePerWeek).toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>' + clubCount + ' × Apex Club (réductions incluses)</span><span>' + clubRevenue.toLocaleString("fr-FR") + ' $</span></div>' +
+            '<div class="summary-row"><span>' + blackCount + ' × Apex Black (réductions incluses)</span><span>' + blackRevenue.toLocaleString("fr-FR") + ' $</span></div>' +
             '<div class="summary-row total mt-2"><span>CA de la semaine</span><span class="value">' + lastWeekData.caWeek.toLocaleString("fr-FR") + ' $</span></div>' +
             '<div class="summary-row"><span>Réductions accordées</span><span>' + lastWeekData.discountWeek.toLocaleString("fr-FR") + ' $</span></div>' +
             '<div class="summary-row"><span>Impôts (' + (taxRate * 100) + '%)</span><span>-' + lastWeekData.taxWeek.toLocaleString("fr-FR") + ' $</span></div>' +
